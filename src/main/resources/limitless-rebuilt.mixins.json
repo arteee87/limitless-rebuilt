@@ -1,0 +1,29 @@
+{
+	"required": true,
+	"minVersion": "0.8",
+	"package": "limitless_rebuilt.mixin",
+	"compatibilityLevel": "JAVA_21",
+	"mixins": [
+		"AnvilScreenHandlerMixin",
+		"EnchantmentHelperMixin",
+		"ItemEnchantmentsComponentBuilderMixin",
+		"ItemEnchantmentsComponentMixin",
+		"EnchantmentScreenHandlerMixin",
+		"EnchantRandomlyLootFunctionMixin",
+		"ItemGroupMixin",
+		"ItemMixin",
+		"ItemStackMixin",
+		"PlayerEntityMixin",
+		"enchantment.EnchantmentMixin",
+		"enchantment.EnchantmentNameMixin"
+	],
+	"client": [
+		"client.AnvilScreenMixin",
+		"client.EnchantingTableBlockMixin",
+		"client.EnchantmentScreenMixin"
+	],
+	"server": [],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

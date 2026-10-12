@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
-  "id": "limitless",
+  "id": "limitless-rebuilt",
+  "name": "Limitless Rebuilt",
   "version": "@version@",
   "description": "Removes the enchanting level ceiling: unlimited levels, reenchanting, configurable enchanting power and anvil behaviour. Port of the mod \"limitless\" by aoueke, kept up to date for newer Minecraft versions. Licensed under LGPL-3.0-only; source code is published alongside the mod.",
   "contact": {
@@ -12,21 +13,21 @@
     "auoeke (original)"
   ],
   "license": "LGPL-3.0-only",
-  "icon": "assets/limitless/icon.png",
+  "icon": "assets/limitless-rebuilt/icon.png",
   "environment": "*",
   "entrypoints": {
     "main": [
-      "limitless.Limitless"
+      "limitless_rebuilt.Limitless"
     ],
     "client": [
-      "limitless.Limitless"
+      "limitless_rebuilt.Limitless"
     ],
     "modmenu": [
-      "limitless.Limitless$ModMenu"
+      "limitless_rebuilt.Limitless$ModMenu"
     ]
   },
   "mixins": [
-    "limitless.mixins.json"
+    "limitless-rebuilt.mixins.json"
   ],
   "depends": {
     "fabricloader": ">=0.16.0",

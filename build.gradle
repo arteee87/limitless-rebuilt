@@ -3,7 +3,7 @@ plugins {
 	id 'maven-publish'
 }
 
-version = project.mod_version
+version = "${project.mod_version}+mc${project.minecraft_version}"
 
 base {
 	archivesName = project.archives_base_name
@@ -50,9 +50,11 @@ dependencies {
 processResources {
 	// fabric.mod.json carries a version placeholder. Token replacement is used instead of Groovy's
 	// `expand`, which would evaluate the "$ModMenu" entry point as a template and fail the build.
-	inputs.property 'version', project.version
+	// the version is a GString once it is interpolated, and Ant's ReplaceTokens takes a plain
+	// Map<String, String>; handing it a GString fails the copy with a ClassCastException
+	inputs.property 'version', project.version.toString()
 	filesMatching('fabric.mod.json') {
-		filter(org.apache.tools.ant.filters.ReplaceTokens, tokens: ['version': project.version])
+		filter(org.apache.tools.ant.filters.ReplaceTokens, tokens: ['version': project.version.toString()])
 	}
 }
 
