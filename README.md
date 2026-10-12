@@ -1,145 +1,19 @@
-# limitless — порт на Minecraft 1.21.4
+# limitless-rebuilt
 
-Порт мода [auoeke/limitless](https://github.com/auoeke/limitless) **2.0.0** (Fabric, 1.19.3) на
-**Fabric / Minecraft 1.21.4**. Оригинальные исходники удалены автором, поэтому мод восстановлен из
-финального jar: ремап `intermediary → named`, декомпиляция и чтение логики. Расшифровка и спецификация
-порта лежат в `../reference/`.
+Mod port [auoeke/limitless](https://github.com/auoeke/limitless) **2.0.0** (Fabric, 1.19.3) to
+**Fabric / Minecraft 1.21.4**. The sources and the repo were deleted by the original author, so the last available jar was extracted and analyzed.
 
-## Что делает
+This mod
 
-* снимает потолок уровня зачарований (`getMaxLevel()` → до `2147483647`, `getMaxPower()` → `MAX_VALUE`);
-* позволяет перезачаровывать предметы и зачарованные книги;
-* нормализует стоимость зачарования и наковальни до стоимости для игрока с уровнем 30;
-* делает силу зачарования любых блоков настраиваемой (по умолчанию 2 за блок из `#c:enchanting_blocks`);
-* снимает лимит количества блоков и расширяет радиус до ±64;
-* разрешает сокровищные зачарования на столе (через теги, а не флаг);
-* постоянная стоимость ремонта и снятый лимит уровня наковальни;
-* слияние конфликтующих и несовместимых зачарований — это два разных переключателя в разделе
-  **anvil**: `merge conflicting enchantments` про конфликты между самими зачарованиями (Knockback и
-  Punch на одном предмете), `merge incompatible enchantments` про неподходящий тип предмета (Impaling
-  на ботинках). Второй в творческом режиме не действует — там есть обход ваниллы; это отмечено
-  подсказкой в меню;
-* частицы зачарования по настраиваемому радиусу, показ реальной стоимости, режим раскрытия зачарований.
-
-## Сборка
-
-```bash
-../tools/gradle-8.12/bin/gradle build      # или ./gradlew, если есть wrapper
-```
-
-Требуется JDK 21. Loom **1.9.2** — более свежие версии требуют Java 25.
-
-* `minecraft_version=1.21.4`, `yarn_mappings=1.21.4+build.8`
-* Fabric API `0.119.4+1.21.4`, cloth-config `17.0.144`, ModMenu `11.0.3`
-
-Результат: `build/libs/limitless-2.1.0.jar`.
-
-## Проверка
-
-Инъекции проверяются статически, но мод дополнительно прогоняется на настоящем выделенном сервере:
-
-```bash
-mkdir -p run && echo eula=true > run/eula.txt
-gradle runServer        # поднимает мир, применяет миксины, пишет config/limitless.json
-```
-
-Проверено на сервере: мод стартует без ошибок миксинов, `/limitless reload` работает, в конфиг
-записываются все 42 ванильных зачарования (у растущих кривых силы — `2147483647`, у одноуровневых — `1`),
-а предмет с уровнями `sharpness 123456 / unbreaking 777` переживает сохранение мира и перезапуск сервера.
-
-Проверка целей миксинов:
-
-```bash
-python3 ../scripts/check-mixins.py build/libs/limitless-2.1.0.jar \
-    <minecraft-merged-intermediary.jar> <minecraft-merged-named.jar> <mappings.tiny>
-```
-
-Скрипт сверяет каждую цель миксина с jar'ом 1.21.4: `@Mixin`, `@At(target=...)`, `@Inject`,
-`@Redirect`, `@Invoker`, `@Overwrite`, и — отдельно — что вызов действительно лежит **внутри** метода,
-который миксин патчит (иначе миксин молча не применяется, а игра падает позже), а также что
-возвращаемый тип обработчика совпадает с типом перехватываемого вызова. Сейчас
-**15/15 миксинов, 30 точек инъекции**.
-
-Крайне важная деталь переноса: в 1.21.4 ванильный отбор уровней идёт **сверху вниз** от
-`getMaxLevel()`, который мод поднимает до `2147483647`, — это около двух миллиардов итераций, и
-задевает не только стол, но и датапак-провайдеры зачарований на сервере. Мод переопределяет
-`EnchantmentHelper#getPossibleEntries` на поиск снизу вверх с пределом в 1024 уровня. Подробности
-и поправка к более раннему выводу — в `../reference/PORT-SPEC.md` §11.
-
-Клиент на машине без 3D-рендера проверить нельзя: `EnchantingTableBlockMixin`, `AnvilScreenMixin` и
-`EnchantmentScreenMixin` применяются лениво, при первом обращении к классу экрана, и требуют ручной
-проверки в игре. О двух ошибках, найденных именно так, — в `../reference/PORT-SPEC.md` §10.
-
-### Потолок 255
-
-1.21.4 хранит уровень зачарования в компоненте `ItemEnchantmentsComponent` и ограничивает его
-**тремя** независимыми способами: кодеком `Codec.intRange(1, 255)`, проверкой в конструкторе и
-`Math.min(level, 255)` в билдере. Все три снимаются миксинами
-`ItemEnchantmentsComponentMixin` / `ItemEnchantmentsComponentBuilderMixin` — без них уровень
-молча округлялся бы до 255. Подробности в `../reference/PORT-SPEC.md` §9.
-
-Тесты: `gradle test` — математика опыта (совпадение с ванильными кривыми `2n+7` / `5n-38` / `9n-158`)
-и обратная совместимость конфига с файлом, написанным версией 1.19.3.
-
-## Диагностика
-
-Статы с учётом зачарований: секция **enchantment stats** в GUI (`enchantment.tooltip`) добавляет
-в тултип строки за то, что зачарования реально делают: острота подмешивается в ванильную строку
-Attack Damage, остальное выводится отдельно — урон по нежити, снарядам, водным, насекомым,
-защита и отброс. Одна строка на вид: Knockback и Punch складываются в `+19 Attack Knockback`, а не
-печатаются двумя. Работает и вне F3+H: если ванильные строки скрыты, недостающие добавляются.
-Секция **включена по умолчанию**.
-
-Про атрибуты: ваниль уже показывает их сам в своём блоке (`+325 Mining Efficiency`,
-`+400% Submerged Mining Speed`) — со значением и единицей измерения, поэтому мод ничего не дублирует.
-
-Проверка без клиента: `/limitless debug stats` печатает ключ и значение каждой строки, которую
-собрал бы тултип.
-
-Сколько опыта требует стол: `enchantment.maxLevelRequirement` (по умолчанию 30, диапазон 0..30) —
-максимум уровней, который стол вправе потребовать (ограничивается и надпись «Level Requirement»,
-и доступность кнопки). Само списание от шкафов не зависит: это всегда
-1, 2 или 3 уровня, как в ванилле; шкафы поднимают уровень зачарования и порог доступности.
-
-Сила от шкафов: `/limitless debug power <x> <y> <z>` печатает сырую силу, потолок и список
-блоков-вкладчиков — четыре шкафа вокруг стола обязаны дать ровно `4 × 2.0 = 8.0`. Зону
-сканирования задаёт `enchantment.enchantingBlocks.radius` (`xz.min/max`, `y.min/max`); при
-переставленных границах мод пишет предупреждение и меняет их местами. Потолок силы —
-`min(maxPower, maxBlocks × 2.0)`, при дефолтах это 1024.
-
-Вкладка **general** → `debug logging`, либо `"debug": true` в `config/limitless.json`. Мод начинает
-писать в лог состояние стола зачарований (суммарную силу, `enchantmentPower` по слотам, число
-кандидатов из `#minecraft:in_enchanting_table`, сколько записей реально подобрано и размер таблицы
-лимитов на клиенте). По этим строкам видно, на каком шаге список пустеет. При входе в мир
-выполняется самопроверка клиента, а в чате есть постоянная команда `/limitless debug`: она прогоняет
-подбор зачарований на сервере и печатает `isEnchantable` для контрольного набора предметов,
-а также итоговые названия уровней (`level names: 1='Sharpness I' 14='Sharpness XIV'`).
-
-`check-mixins.py` сверяет jar с `limitless.mixins.json`: миксин, который не объявлен в конфиге,
-ошибкой на сборке не ловится — Mixin отказывается отдавать его только в момент загрузки, то есть
-уже в игре.
-
-## Конфигурация
-
-`config/limitless.json`, формат совпадает с 1.19.3 — старые файлы читаются как есть
-(проверено тестом `ConfigSerializerTest`). Есть hot-reload по изменению файла и команда
-`/limitless reload` (permission level 2). Экран настроек: ModMenu → limitless.
-
-## Структура
-
-```
-src/main/java/limitless/
-  Limitless.java              инициализация, точка входа ModMenu
-  Command.java                /limitless reload
-  config/                     модель конфига, Gson-сериализатор, GUI
-  enchantment/                математика опыта, блоки зачарования, лимиты уровней, слияние
-  mixin/                      15 миксинов: серверные, клиентские и два access-интерфейса
-```
-
-## Документация
-
-- `../reference/PORTING-GUIDE.md` — механики мода, точки взаимодействия с vanilla и чек-лист
-  переноса на следующую версию Minecraft.
-- `../reference/PORT-SPEC.md` — хронология переноса и разбор найденных багов.
-- `../reference/DYNAMIC-STATS-PLAN.md` — план динамических статов (реализован, оставлен как
-  справочный).
+    raises the enchantment level limit to 2147483647;
+    allows items to be reenchanted (configurable; enabled by default);
+    normalizes anvil enchantment cost to take the same amount of experience as a player with that exact level;
+    makes enchantment cost for players with levels above 30 the same as for players with level 30 (configurable);
+    allows enchantments in enchantment tables to be revealed (disabled by default);
+    makes the enchanting power of all blocks configurable (only through the JSON configuration);
+    treats other mods' bookshelves as enchanting blocks in addition to the default bookshelf;
+    disables survival mode anvil level limit;
+    makes anvil repair cost constant instead of exponential (configurable; enabled by default);
+    disables bookshelf limit and increases range to 64 meters horizontally and vertically (configurable);
+    allows treasure enchantments to be acquired at enchanting tables (configurable; enabled by default); and
+    shows the enchantment effects in the tooltip (configurable, enabled by default).
