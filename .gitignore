@@ -1,0 +1,20 @@
+# сборка и кэш Gradle
+build/
+.gradle/
+
+# локальный запуск: конфиг, мир, логи
+run/
+logs/
+
+# инструменты разработки
+.idea/
+*.iml
+.vscode/
+.vs/
+.classpath
+.project
+.settings/
+
+# прочее
+.DS_Store
+Thumbs.db
