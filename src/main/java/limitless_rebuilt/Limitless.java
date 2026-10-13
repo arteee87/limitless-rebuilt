@@ -24,15 +24,24 @@ import net.fabricmc.api.Environment;
 import net.fabricmc.api.EnvironmentInterface;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
+import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import java.util.ArrayList;
 import java.util.List;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.screen.TitleScreen;
+import net.minecraft.client.toast.SystemToast;
+import net.minecraft.text.Text;
 
 @EnvironmentInterface(value = EnvType.CLIENT, itf = ClientModInitializer.class)
 public final class Limitless implements ModInitializer, ClientModInitializer {
 	public static final String ID = "limitless-rebuilt";
+
+	/** The configuration error toast is shown once per session; {@code AFTER_INIT} fires per screen. */
+	@Environment(EnvType.CLIENT)
+	private static boolean configErrorReported;
 
 	@Override
 	public void onInitialize() {
@@ -63,6 +72,32 @@ public final class Limitless implements ModInitializer, ClientModInitializer {
 				selfCheck(manager);
 			}
 		});
+
+		ScreenEvents.AFTER_INIT.register((client, screen, width, height) -> reportConfigError(client, screen));
+	}
+
+	/**
+	 * Tells the player once that the configuration file was not usable and the defaults are running.
+	 *
+	 * <p>A broken file no longer gets overwritten, so it stays broken until someone repairs it, and
+	 * every symptom is silent: enchantments do not apply, the anvil behaves oddly, options read back
+	 * as the wrong value. Nothing of that points at the configuration file, and the log line that
+	 * says so is easy to miss, so it is repeated where it cannot be.
+	 *
+	 * <p>Raised from {@code TitleScreen} rather than from world entry, since the error is about the
+	 * client having started at all and is worth showing before anything is loaded. The flag keeps it
+	 * to once per session even though {@code AFTER_INIT} fires for every screen.
+	 */
+	@Environment(EnvType.CLIENT)
+	private static void reportConfigError(MinecraftClient client, Screen screen) {
+		if (configErrorReported || !(screen instanceof TitleScreen) || Configuration.lastReadError() == null) {
+			return;
+		}
+
+		configErrorReported = true;
+		SystemToast.add(client.getToastManager(), SystemToast.Type.PERIODIC_NOTIFICATION,
+				Text.translatable("toast.limitless-rebuilt.config_error.title"),
+				Text.translatable("toast.limitless-rebuilt.config_error.description"));
 	}
 
 	/**

@@ -16,7 +16,9 @@
 	"text.autoconfig.limitless-rebuilt.option.enchantment.conflicts.merge": "merge conflicting enchantments",
 	"text.autoconfig.limitless-rebuilt.option.enchantment.normalization": "normalization",
 	"text.autoconfig.limitless-rebuilt.option.enchantment.normalization.enabled": "enabled",
+	"text.autoconfig.limitless-rebuilt.option.enchantment.normalization.enabled.@Tooltip": "Changes the cost scaling formula so it does not increase past a certain player level.",
 	"text.autoconfig.limitless-rebuilt.option.enchantment.normalization.offset": "level offset",
+	"text.autoconfig.limitless-rebuilt.option.enchantment.normalization.offset.@Tooltip": "Enchanting table cost scaling will stop past this player level.",
 	"text.autoconfig.limitless-rebuilt.option.enchantment.reenchanting": "reenchanting",
 	"text.autoconfig.limitless-rebuilt.option.enchantment.reenchanting.enabled": "enabled",
 	"text.autoconfig.limitless-rebuilt.option.enchantment.reenchanting.removeConflicts": "remove conflicting enchantments",
@@ -43,9 +45,13 @@
 	"config.limitless-rebuilt.useGlobalMaxLevel": "use global maximum level",
 	"text.autoconfig.limitless-rebuilt.option.anvil.normalization": "normalization",
 	"text.autoconfig.limitless-rebuilt.option.anvil.normalization.enabled": "enabled",
+	"text.autoconfig.limitless-rebuilt.option.anvil.normalization.enabled.@Tooltip": "Cost no longer depends on player level.",
 	"text.autoconfig.limitless-rebuilt.option.anvil.normalization.display": "cost display",
+	"text.autoconfig.limitless-rebuilt.option.anvil.normalization.display.@Tooltip": "How the cost is drawn; does not affect the cost. Normal - As in vanilla, Replaced - shows the level you'll have after enchanting, Appended - both.",
 	"text.autoconfig.limitless-rebuilt.option.anvil.fixedCost": "fixed cost",
+	"text.autoconfig.limitless-rebuilt.option.anvil.fixedCost.@Tooltip": "Stops vanilla from adding a hidden, growing penalty to an item on every repair or enchantment.",
 	"text.autoconfig.limitless-rebuilt.option.anvil.levelLimit": "level limit",
+	"text.autoconfig.limitless-rebuilt.option.anvil.levelLimit.@Tooltip": "Vanilla shows \"too expensive\" when cost exceeds 40 levels. This value replaces this limit.",
 	"text.autoconfig.limitless-rebuilt.option.anvil.mergeConflicts": "merge conflicting enchantments",
 	"text.autoconfig.limitless-rebuilt.option.anvil.mergeConflicts.@Tooltip": "Between the enchantments themselves: Knockback and Punch cannot end up on one item. Not the same as \"merge incompatible enchantments\", which is about the item.",
 	"text.autoconfig.limitless-rebuilt.option.anvil.mergeIncompatible": "merge incompatible enchantments",
@@ -111,5 +117,7 @@
 	"tooltip.limitless.protection.fire": "-%s%% Fire Damage Taken",
 	"tooltip.limitless.protection.blast": "-%s%% Blast Damage Taken",
 	"tooltip.limitless.protection.projectile": "-%s%% Projectile Damage Taken",
-	"tooltip.limitless.protection.fall": "-%s%% Fall Damage Taken"
+	"tooltip.limitless.protection.fall": "-%s%% Fall Damage Taken",
+	"toast.limitless-rebuilt.config_error.title": "Limitless Rebuilt",
+	"toast.limitless-rebuilt.config_error.description": "Failed to read limitless.json. See log for details. Default values are loaded."
 }

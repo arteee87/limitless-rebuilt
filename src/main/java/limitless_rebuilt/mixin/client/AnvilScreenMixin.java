@@ -1,5 +1,6 @@
 package limitless_rebuilt.mixin.client;
 
+import limitless_rebuilt.LimitlessLogger;
 import limitless_rebuilt.config.Configuration;
 import limitless_rebuilt.config.anvil.entry.AnvilNormalizationEntry;
 import limitless_rebuilt.config.common.CostDisplay;
@@ -14,6 +15,7 @@ import net.minecraft.util.Identifier;
 import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Constant;
 import org.spongepowered.asm.mixin.injection.ModifyConstant;
@@ -35,6 +37,10 @@ public abstract class AnvilScreenMixin extends ForgingScreen<AnvilScreenHandler>
 			Identifier texture) {
 		super(handler, inventory, title, texture);
 	}
+
+	/** The last line printed by {@link #logDisplayChange}; see the note there on frame rate. */
+	@Unique
+	private String limitlessLastDisplay;
 
 	@ModifyConstant(method = "drawForeground", constant = @Constant(intValue = 40))
 	private int modifyLevelLimit(int original) {
@@ -61,16 +67,39 @@ public abstract class AnvilScreenMixin extends ForgingScreen<AnvilScreenHandler>
 			int relative = ExperienceUtil.normalizedCost(client.player, cost);
 
 			if (normalization.display == CostDisplay.REPLACE) {
+				logDisplayChange("anvil display: cost=%d normalized=%d -> REPLACE".formatted(cost, relative));
 				return Text.translatable(key, relative);
 			}
 
 			if (normalization.display == CostDisplay.APPEND) {
 				Object[] copy = args.clone();
 				copy[0] = args[0] + " (" + relative + ")";
+				logDisplayChange("anvil display: cost=%d normalized=%d -> APPEND".formatted(cost, relative));
 				return Text.translatable(key, copy);
 			}
+		} else if (Configuration.instance.debug && args.length > 0 && args[0] instanceof Integer cost) {
+			// the guard is "player is above the cost", so this is the line that explains why the
+			// shown cost is still the vanilla one
+			logDisplayChange("anvil display: cost=%d NOT normalized (enabled=%s level=%s display=%s)"
+					.formatted(cost, normalization.enabled,
+							client.player != null ? client.player.experienceLevel : "no player",
+							normalization.display));
 		}
 
 		return Text.translatable(key, args);
+	}
+
+	/**
+	 * This runs from {@code drawForeground}, so it is reached once per drawn frame; the message is
+	 * printed only when it differs from the previous one. The three branches above are mutually
+	 * exclusive, so a single remembered message is enough to cover all of them.
+	 */
+	private void logDisplayChange(String message) {
+		String line = LimitlessLogger.side() + " " + message;
+
+		if (!line.equals(this.limitlessLastDisplay)) {
+			this.limitlessLastDisplay = line;
+			LimitlessLogger.debug(line);
+		}
 	}
 }

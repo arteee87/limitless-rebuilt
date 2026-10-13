@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -190,14 +191,74 @@ class ConfigSerializerTest {
 	}
 
 	@Test
-	@DisplayName("a malformed file falls back to the defaults instead of throwing")
+	@DisplayName("a malformed file is reported and left exactly as it was")
 	void survivesMalformedFile(@TempDir Path directory) throws IOException {
 		Path file = directory.resolve(Configuration.FILE_NAME);
 		Files.writeString(file, "{ this is not json", StandardCharsets.UTF_8);
 
+		assertThrows(ConfigReadException.class, () -> ConfigSerializer.read(file));
+		assertEquals("{ this is not json", Files.readString(file));
+	}
+
+	@Test
+	@DisplayName("a file with the wrong shape is not rewritten either")
+	void survivesWrongShape(@TempDir Path directory) throws IOException {
+		Path file = directory.resolve(Configuration.FILE_NAME);
+		String broken = "{\"enchantment\":{\"enchantingBlocks\":{\"whitelist\":[\"a\"]}}}";
+		Files.writeString(file, broken, StandardCharsets.UTF_8);
+
+		assertThrows(ConfigReadException.class, () -> ConfigSerializer.read(file));
+		assertEquals(broken, Files.readString(file));
+	}
+
+	@Test
+	@DisplayName("the error names the position and the option that was rejected")
+	void errorNamesPositionAndOption(@TempDir Path directory) throws IOException {
+		Path file = directory.resolve(Configuration.FILE_NAME);
+		Files.writeString(file, "{\"anvil\":{\"levelLimit\":{\"x\":1}}}", StandardCharsets.UTF_8);
+
+		ConfigReadException failure =
+				assertThrows(ConfigReadException.class, () -> ConfigSerializer.read(file));
+
+		assertEquals("anvil.levelLimit", failure.option());
+		assertTrue(failure.getMessage().contains("line=1"), failure.getMessage());
+		assertTrue(failure.getMessage().contains("column=25"), failure.getMessage());
+		assertTrue(failure.getMessage().contains("Expected an int but was BEGIN_OBJECT"), failure.getMessage());
+	}
+
+	@Test
+	@DisplayName("the error message does not leak Gson's own cause class or its link")
+	void errorMessageIsClean(@TempDir Path directory) throws IOException {
+		Path file = directory.resolve(Configuration.FILE_NAME);
+		Files.writeString(file, "{\"anvil\":{\"levelLimit\":{\"x\":1}}}", StandardCharsets.UTF_8);
+
+		ConfigReadException failure =
+				assertThrows(ConfigReadException.class, () -> ConfigSerializer.read(file));
+
+		assertFalse(failure.getMessage().contains("java.lang.IllegalStateException"), failure.getMessage());
+		assertFalse(failure.getMessage().contains("github.com/google/gson"), failure.getMessage());
+	}
+
+	@Test
+	@DisplayName("an empty file is filled with the defaults, since there is nothing to lose")
+	void fillsEmptyFile(@TempDir Path directory) throws IOException {
+		Path file = directory.resolve(Configuration.FILE_NAME);
+		Files.writeString(file, "   ", StandardCharsets.UTF_8);
+
 		Configuration configuration = ConfigSerializer.read(file);
 
 		assertEquals(512, configuration.enchantment.enchantingBlocks.maxBlocks);
+		assertTrue(Files.size(file) > 0);
+	}
+
+	@Test
+	@DisplayName("the defaults the fallback hands out are complete")
+	void defaultsAreComplete() {
+		Configuration configuration = ConfigSerializer.defaults();
+
+		assertEquals(30, configuration.enchantment.normalization.offset);
+		assertEquals(CostDisplay.REPLACE, configuration.anvil.normalization.display);
+		assertNotNull(configuration.enchantment.enchantingBlocks.whitelist);
 	}
 
 	@Test

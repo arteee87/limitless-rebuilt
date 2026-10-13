@@ -114,9 +114,11 @@ public final class LimitlessConfigScreen {
 		SubCategoryBuilder section = section(entries, "enchantment.normalization");
 
 		section.add(toggle(entries, "enchantment.normalization.enabled", configuration.normalization.enabled,
-				value -> configuration.normalization.enabled = value));
+				value -> configuration.normalization.enabled = value,
+				"enchantment.normalization.enabled.@Tooltip"));
 		section.add(field(entries, "enchantment.normalization.offset", configuration.normalization.offset, 0, 200,
-				value -> configuration.normalization.offset = value));
+				value -> configuration.normalization.offset = value,
+				"enchantment.normalization.offset.@Tooltip"));
 
 		return section.build();
 	}
@@ -258,17 +260,22 @@ public final class LimitlessConfigScreen {
 				value -> configuration.mergeIncompatible = value,
 				"anvil.mergeIncompatible.@Tooltip"));
 		category.addEntry(toggle(entries, "anvil.fixedCost", configuration.fixedCost,
-				value -> configuration.fixedCost = value));
+				value -> configuration.fixedCost = value,
+				"anvil.fixedCost.@Tooltip"));
 		category.addEntry(field(entries, "anvil.levelLimit", configuration.levelLimit, 0, Integer.MAX_VALUE,
-				value -> configuration.levelLimit = value));
+				value -> configuration.levelLimit = value,
+				"anvil.levelLimit.@Tooltip"));
 
 		SubCategoryBuilder normalization = section(entries, "anvil.normalization");
 		normalization.add(toggle(entries, "anvil.normalization.enabled", configuration.normalization.enabled,
-				value -> configuration.normalization.enabled = value));
+				value -> configuration.normalization.enabled = value,
+				"anvil.normalization.enabled.@Tooltip"));
 		normalization.add(entries.startEnumSelector(
 						Text.translatable("text.autoconfig.limitless-rebuilt.option.anvil.normalization.display"),
 						CostDisplay.class, configuration.normalization.display)
 				.setDefaultValue(configuration.normalization.display)
+				.setTooltip(Text.translatable(
+						"text.autoconfig.limitless-rebuilt.option.anvil.normalization.display.@Tooltip"))
 				.setSaveConsumer(value -> configuration.normalization.display = value)
 				.build());
 
@@ -328,12 +335,36 @@ public final class LimitlessConfigScreen {
 			int min,
 			int max,
 			java.util.function.Consumer<Integer> consumer) {
-		return entries.startIntField(Text.translatable(translationKey(key)), value)
-				.setDefaultValue(value)
+		return field(entries, key, value, min, max, consumer, null);
+	}
+
+	/**
+	 * {@code description} names the translation key of a hover note, the same way
+	 * {@link #toggle(ConfigEntryBuilder, String, boolean, Consumer, String)} does; {@code null}
+	 * leaves the field bare.
+	 */
+	private static me.shedaniel.clothconfig2.gui.entries.IntegerListEntry field(
+			ConfigEntryBuilder entries,
+			String key,
+			int value,
+			int min,
+			int max,
+			java.util.function.Consumer<Integer> consumer,
+			String description) {
+		me.shedaniel.clothconfig2.impl.builders.IntFieldBuilder builder = entries.startIntField(
+				Text.translatable(translationKey(key)),
+				value);
+
+		builder.setDefaultValue(value)
 				.setMin(min)
 				.setMax(max)
-				.setSaveConsumer(consumer)
-				.build();
+				.setSaveConsumer(consumer);
+
+		if (description != null) {
+			builder.setTooltip(Text.translatable(translationKey(description)));
+		}
+
+		return builder.build();
 	}
 
 	private static String translationKey(String key) {

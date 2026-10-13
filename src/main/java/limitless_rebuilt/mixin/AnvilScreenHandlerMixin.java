@@ -1,27 +1,61 @@
 package limitless_rebuilt.mixin;
 
+import limitless_rebuilt.LimitlessLogger;
 import limitless_rebuilt.config.Configuration;
+import limitless_rebuilt.enchantment.ExperienceUtil;
 import net.minecraft.enchantment.Enchantment;
+import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.item.ItemStack;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.screen.AnvilScreenHandler;
-import net.minecraft.screen.Property;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Constant;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyConstant;
 import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.Unique;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * Anvil behaviour.
  *
- * <p>1.19.3 patched this class the same way; the method the level limit targeted is still
- * {@code updateResult} (it is merely declared abstract in {@code ForgingScreenHandler} now, so it
- * has no Yarn name of its own).
+ * <p>1.19.3 patched this class the same way, across two mixin classes: one for the anvil rules and
+ * one for cost normalization. They are merged here, and the level limit now targets the literal it
+ * originally targeted rather than the cost property.
+ *
+ * <p>Priority is {@code -1000} so that this applies after other mods have rewritten the same
+ * injection points; the 1.19.3 mixin carried it too.
  */
-@Mixin(AnvilScreenHandler.class)
+@Mixin(value = AnvilScreenHandler.class, priority = -1000)
 public abstract class AnvilScreenHandlerMixin {
 	private static final int VANILLA_MINIMUM_COST = 40;
+
+	/**
+	 * The last message printed by each of the three log points below.
+	 *
+	 * <p>{@code canTakeOutput} is reached once per drawn frame through
+	 * {@code AnvilScreen#drawForeground} calling {@code Slot#canTakeItems}, and {@code updateResult}
+	 * runs several times per slot update, so logging unconditionally floods the file at frame rate. The
+	 * text is built from the whole state, so printing only on a change keeps every line informative:
+	 * anything that moved prints, and a stretch where nothing moved prints once. It matches how the
+	 * enchanting table already gates its {@code render} debug behind a printed-once flag, except that
+	 * an anvil's state really does change while the screen stays open, so the test has to be "changed"
+	 * rather than "first frame".
+	 *
+	 * <p>The client and the integrated server each own a handler, so each keeps its own set and both
+	 * print their own transitions.
+	 */
+	@Unique
+	private String limitlessLastInput;
+
+	@Unique
+	private String limitlessLastResult;
+
+	@Unique
+	private String limitlessLastCanTakeOutput;
 
 	/**
 	 * Vanilla doubles the repair cost every time the anvil is used; the mod keeps it constant, which
@@ -51,7 +85,13 @@ public abstract class AnvilScreenHandlerMixin {
 			)
 	)
 	private boolean allowIncompatibleItem(boolean acceptable) {
-		return acceptable || Configuration.instance.anvil.mergeIncompatible;
+		boolean allowed = acceptable || Configuration.instance.anvil.mergeIncompatible;
+
+		if (!acceptable && allowed) {
+			LimitlessLogger.debug("anvil item: NOT acceptable by vanilla -> allowed by mergeIncompatible");
+		}
+
+		return allowed;
 	}
 
 	/** Allows applying an enchantment that conflicts with one already on the item. */
@@ -65,26 +105,152 @@ public abstract class AnvilScreenHandlerMixin {
 			require = 0
 	)
 	private static boolean allowConflictingEnchantment(RegistryEntry<Enchantment> first, RegistryEntry<Enchantment> second) {
-		return Enchantment.canBeCombined(first, second) || Configuration.instance.anvil.mergeConflicts;
+		boolean combined = Enchantment.canBeCombined(first, second);
+		boolean allowed = combined || Configuration.instance.anvil.mergeConflicts;
+
+		if (!combined && allowed) {
+			LimitlessLogger.debug("anvil enchantments: %s and %s conflict -> allowed by mergeConflicts"
+					.formatted(name(first), name(second)));
+		}
+
+		return allowed;
+	}
+
+	private static String name(RegistryEntry<Enchantment> entry) {
+		return entry.getKey().map(key -> key.getValue().toString()).orElse("unknown");
 	}
 
 	/**
-	 * Vanilla refuses to produce a result once the cost reaches forty levels, and caps a rename only
-	 * operation at thirty nine; {@code levelLimit} replaces that threshold.
+	 * Vanilla refuses to produce a result once the cost reaches forty levels; {@code levelLimit}
+	 * replaces that threshold. 1.19.3 did the same thing with a single {@code @ModifyConstant}.
 	 *
-	 * <p>{@code updateResult} reads the cost property exactly twice, in the two comparisons against
-	 * forty, so clamping the value it returns turns "at least forty" into "at least max(forty,
-	 * levelLimit)" — which is what raising the limit means. 1.19.3 replaced the literal forty with
-	 * a constant, but it also rewrote the unrelated "stacked items cost at least forty levels" rule,
-	 * which made the anvil refuse any stack of more than one item; that third occurrence is left
-	 * alone here.
+	 * <p><b>An earlier port clamped the cost property instead, and that cannot work.</b> Reading the
+	 * cost through {@code Math.min(cost, levelLimit)} only ever lowers the value the comparisons see:
+	 * with {@code levelLimit} at its {@link Integer#MAX_VALUE} default the cost arrives unchanged, the
+	 * threshold stays forty, and an expensive combination is still emptied at the line below. The
+	 * limit has to replace the literal, not the number it is compared against.
+	 *
+	 * <p>Three constants of forty live in {@code updateResult}, and only two of them are the
+	 * threshold. The first is the unrelated "a stack of more than one item costs forty" rule
+	 * (bytecode offset 723), which the 1.19.3 mod also rewrote and thereby made the anvil refuse any
+	 * stack; {@link #modifyRenameThreshold} and {@link #modifyResultThreshold} take the two
+	 * comparisons separately and leave that one alone.
+	 *
+	 * <p>Mixin 0.8.7 puts the {@code ordinal} on {@link Constant} rather than on
+	 * {@code @ModifyConstant} itself. Numbering only the constants that are forty, in bytecode order,
+	 * they are 0 = the stack rule, 1 = this rename-only cap and 2 = the gate below.
+	 */
+	@ModifyConstant(method = "updateResult", constant = @Constant(intValue = VANILLA_MINIMUM_COST, ordinal = 1))
+	private int modifyRenameThreshold(int forty) {
+		return Configuration.instance.anvil.levelLimit;
+	}
+
+	/**
+	 * The gate that empties the result outside creative mode; the one that matters. This is the
+	 * single line that made a priced enchantment book come back as a red cross.
+	 */
+	@ModifyConstant(method = "updateResult", constant = @Constant(intValue = VANILLA_MINIMUM_COST, ordinal = 2))
+	private int modifyResultThreshold(int forty) {
+		return Configuration.instance.anvil.levelLimit;
+	}
+
+	/**
+	 * Replaces the deduction when the player sits well above the cost.
+	 *
+	 * <p>Vanilla drops the player to the resulting level, so a high level payer loses almost
+	 * everything; subtracting the equivalent experience of a level zero player keeps their levels.
+	 * 1.19.3 kept this in its own mixin class; it only ever touches the deduction, so whether the
+	 * player may take the result at all stays vanilla.
 	 */
 	@Redirect(
-			method = "updateResult",
-			at = @At(value = "INVOKE", target = "Lnet/minecraft/screen/Property;get()I")
+			method = "onTakeOutput",
+			at = @At(
+					value = "INVOKE",
+					target = "Lnet/minecraft/entity/player/PlayerEntity;addExperienceLevels(I)V"
+			)
 	)
-	private int applyLevelLimit(Property property) {
-		int cost = property.get();
-		return Math.min(cost, Math.max(Configuration.instance.anvil.levelLimit, VANILLA_MINIMUM_COST));
+	private void normalizeCost(PlayerEntity player, int levels) {
+		if (Configuration.instance.anvil.normalization.enabled && player.experienceLevel > levels) {
+			ExperienceUtil.addExperienceLevelsNormalized(player, levels);
+		} else {
+			player.addExperienceLevels(levels);
+		}
+	}
+
+	/** Records the inputs before they are combined, so a rejected input can be traced back. */
+	@Inject(method = "updateResult", at = @At("HEAD"))
+	private void logInput(CallbackInfo info) {
+		if (!Configuration.instance.debug) {
+			return;
+		}
+
+		AnvilScreenHandler handler = (AnvilScreenHandler) (Object) this;
+
+		String message = LimitlessLogger.side()
+				+ " anvil input: slot0=%s slot1=%s mergeConflicts=%s mergeIncompatible=%s levelLimit=%d"
+						.formatted(describe(handler.getSlot(0).getStack()),
+								describe(handler.getSlot(1).getStack()),
+								Configuration.instance.anvil.mergeConflicts,
+								Configuration.instance.anvil.mergeIncompatible,
+								Configuration.instance.anvil.levelLimit);
+
+		if (!message.equals(this.limitlessLastInput)) {
+			this.limitlessLastInput = message;
+			LimitlessLogger.debug(message);
+		}
+	}
+
+	/**
+	 * Reports the outcome, which is the line that tells "the anvil is broken" apart from "the anvil
+	 * worked and the combination was simply too expensive for this player".
+	 */
+	@Inject(method = "updateResult", at = @At("RETURN"))
+	private void logResult(CallbackInfo info) {
+		if (!Configuration.instance.debug) {
+			return;
+		}
+
+		AnvilScreenHandler handler = (AnvilScreenHandler) (Object) this;
+
+		String message = LimitlessLogger.side() + " anvil result: cost=%d output=%s"
+				.formatted(handler.getLevelCost(),
+						describe(handler.getSlot(2).getStack()));
+
+		if (!message.equals(this.limitlessLastResult)) {
+			this.limitlessLastResult = message;
+			LimitlessLogger.debug(message);
+		}
+	}
+
+	/**
+	 * Logs the affordability gate. Vanilla keeps this check untouched, so a player below the cost
+	 * cannot take the result no matter what {@code levelLimit} says; normalization only changes what
+	 * is deducted afterwards, and only when the player is above the cost.
+	 */
+	@Inject(method = "canTakeOutput", at = @At("RETURN"))
+	private void logCanTakeOutput(PlayerEntity player, boolean present, CallbackInfoReturnable<Boolean> info) {
+		if (!Configuration.instance.debug) {
+			return;
+		}
+
+		String message = LimitlessLogger.side()
+				+ " anvil canTakeOutput: level=%d cost=%d normalized=%s -> %s"
+						.formatted(player.experienceLevel,
+								((AnvilScreenHandler) (Object) this).getLevelCost(),
+								Configuration.instance.anvil.normalization.enabled,
+								info.getReturnValue());
+
+		if (!message.equals(this.limitlessLastCanTakeOutput)) {
+			this.limitlessLastCanTakeOutput = message;
+			LimitlessLogger.debug(message);
+		}
+	}
+
+	private static String describe(ItemStack stack) {
+		if (stack.isEmpty()) {
+			return "empty";
+		}
+
+		return stack.getItem() + (stack.getCount() > 1 ? " x" + stack.getCount() : "");
 	}
 }

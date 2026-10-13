@@ -51,6 +51,19 @@ public final class LimitlessLogger {
 		}
 	}
 
+	/**
+	 * Which side of the game the caller is on, as {@code [render]} or {@code [server]}.
+	 *
+	 * <p>An anvil debug line comes from the screen handler, which both sides own: the integrated
+	 * server runs the same handler the client draws, so the two are only told apart by the thread.
+	 * Vanilla names those threads {@code Render thread} and {@code Server thread}, and on a dedicated
+	 * server only the latter exists.
+	 */
+	public static String side() {
+		String thread = Thread.currentThread().getName();
+		return thread.equals("Render thread") ? "[render]" : "[server]";
+	}
+
 	public static void time(String message, Runnable action) {
 		long start = System.nanoTime();
 		action.run();
