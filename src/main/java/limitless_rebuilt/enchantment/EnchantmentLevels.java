@@ -28,15 +28,40 @@ public final class EnchantmentLevels {
 	private static final int MAX_POWER_SCAN = 1000;
 
 	/**
-	 * Defaults that deliberately differ from the vanilla ceiling.
+	 * Ceiling offered to a freshly created per-enchantment entry.
 	 *
-	 * <p>Vanilla caps wind burst at three because its knockback multiplier is a lookup table of
-	 * exactly three values — but a linear formula sits behind that table and starts being read from
-	 * level four on, so levels four and five are values the game can genuinely produce. The automatic
-	 * scan below cannot see this: wind burst has no {@code primary_items} and no growing
-	 * {@code minPower}, so nothing in its data ever trips.
+	 * <p>An enchantment whose power curve keeps growing used to land on {@link Integer#MAX_VALUE},
+	 * which the enchanting table then offered literally: a Wind Burst 2147483647 reports a knockback
+	 * multiplier of seven hundred million, and the hit that follows throws the target out of the world
+	 * rather than damaging it. A hundred keeps the mechanic — the point of the mod — while leaving
+	 * every number on a scale the game can survive.
+	 *
+	 * <p>This is the <em>default</em> only. The configuration field still accepts up to
+	 * {@link Integer#MAX_VALUE}, so anybody who wants the old ceiling can type it in, and entries
+	 * already in a file are never rewritten.
 	 */
-	private static final Map<String, Integer> DEFAULT_MAX_LEVELS = Map.of("minecraft:wind_burst", 5);
+	private static final int DEFAULT_CEILING = 100;
+
+	/**
+	 * Defaults that deliberately differ from {@link #DEFAULT_CEILING}.
+	 *
+	 * <p>{@code wind_burst} goes up because vanilla caps it at three only because its knockback
+	 * multiplier is a lookup table of exactly three values — a linear formula sits behind that table
+	 * and starts being read from level four on, so four and five are values the game can genuinely
+	 * produce. The automatic scan cannot see this: wind burst has no {@code primary_items} and no
+	 * growing {@code minPower}, so nothing in its data ever trips.
+	 *
+	 * <p>{@code knockback} and {@code punch} go down because their value is a knockback strength, not
+	 * a damage number: {@code LivingEntity#takeKnockback} sets a velocity of
+	 * {@code normalise(direction) * strength}, so a level of a hundred is fifty times vanilla Knockback
+	 * II and launches the target across the world. Ten is still loud, and stops short of ejecting
+	 * anyone. Protection needs no entry of its own — {@code DamageUtil#getInflictedDamage} clamps it
+	 * to 20 of 25, which level nineteen already reaches.
+	 */
+	private static final Map<String, Integer> DEFAULT_MAX_LEVELS = Map.of(
+			"minecraft:knockback", 10,
+			"minecraft:punch", 10,
+			"minecraft:wind_burst", 5);
 
 	private static volatile Registry<Enchantment> registry;
 
@@ -90,9 +115,10 @@ public final class EnchantmentLevels {
 	 * The default offered in the per-enchantment configuration for an enchantment the file has not
 	 * been told about yet.
 	 *
-	 * <p>{@link #DEFAULT_MAX_LEVELS} wins where it applies. Otherwise: {@link Integer#MAX_VALUE} when
-	 * the enchantment can be levelled further because its power requirement keeps growing, the
-	 * vanilla maximum when it is a single level enchantment, and the vanilla maximum otherwise.
+	 * <p>{@link #DEFAULT_MAX_LEVELS} wins where it applies. Otherwise the answer is
+	 * {@link Integer#MAX_VALUE} when the enchantment can be levelled further because its power
+	 * requirement keeps growing, or the vanilla maximum when it does not — and either way it comes
+	 * back through {@link #clamp}, because a ceiling nobody asked for is still the right default.
 	 */
 	private static int defaultMaxLevel(String identifier, Enchantment enchantment) {
 		Integer override = DEFAULT_MAX_LEVELS.get(identifier);
@@ -115,12 +141,23 @@ public final class EnchantmentLevels {
 			int power = enchantment.getMinPower(minLevel + level);
 
 			if (previousPower < power) {
-				return Integer.MAX_VALUE;
+				return clamp(Integer.MAX_VALUE);
 			}
 
 			previousPower = power;
 		}
 
-		return original;
+		return clamp(original);
+	}
+
+	/**
+	 * Pulls a default down to {@link #DEFAULT_CEILING}, never below one.
+	 *
+	 * <p>Only defaults pass through here. A number somebody typed into the configuration is left
+	 * exactly as it is, which is what keeps the ceiling of {@link Integer#MAX_VALUE} reachable on
+	 * purpose.
+	 */
+	private static int clamp(int level) {
+		return Math.min(Math.max(level, 1), DEFAULT_CEILING);
 	}
 }
