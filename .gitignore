@@ -15,6 +15,11 @@ logs/
 .project
 .settings/
 
+# секреты: PAT Modrinth и GitHub. Хранятся в .env уровнем выше, но если файл появится здесь — он
+# обязан остаться незакоммиченным
+.env
+.env.*
+
 # прочее
 .DS_Store
 Thumbs.db

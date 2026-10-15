@@ -1,6 +1,7 @@
 plugins {
 	id 'fabric-loom' version "${loom_version}"
 	id 'maven-publish'
+	id 'com.modrinth.minotaur' version '2.10.0'
 }
 
 version = "${project.mod_version}+mc${project.minecraft_version}"
@@ -82,5 +83,40 @@ jar {
 	// the jar ships without the licence text the copyleft expects
 	from('LICENSE.md') {
 		rename { "${it.replace('.md','')}_${project.base.archivesName.get()}" }
+	}
+}
+
+// Публикация на Modrinth официальным плагином Minotaur. Токен сюда не попадает: плагин по умолчанию
+// читает переменную окружения MODRINTH_TOKEN, а CI берёт её из секрета GitHub Actions.
+modrinth {
+	// ровно тот же суффикс, что у jar и у тега. В CI перед сборкой выполняется
+	// ./tools/release-matrix.py --check, который падает, если тег и gradle.properties разошлись:
+	// иначе на Modrinth уехал бы номер из одной версии под jar, собранный из другой.
+	versionNumber = "${project.mod_version}+mc${project.minecraft_version}"
+	projectId = project.modrinth_project_id
+
+	gameVersions = [project.minecraft_version]
+	loaders = ['fabric']
+
+	// CI передаёт их через ORG_GRADLE_PROJECT_*, потому что текст релиза многострочный и через -P
+	// с кавычками ломается. Локально остаются значения по умолчанию.
+	versionType = findProperty('modrinthVersionType') ?: 'release'
+	changelog = findProperty('modrinthChangelog') ?: ''
+
+	// только переремапленный jar: -sources.jar Modrinth не просит, и лишним он там тоже не будет.
+	// archiveFile, а не сама задача: плагин ждёт Provider<RegularFile>, и передача TaskProvider
+	// падает ещё на этапе чтения build.gradle.
+	file = project.tasks.named('remapJar').flatMap { it.archiveFile }
+
+	// Прогон без заливки, чтобы проверить разбор полей, не израсходовав номер версии:
+	//     MODRINTH_TOKEN=... ./gradlew modrinth -PmodrinthDebug=true
+	// findProperty отдаёт строку, а свойство здесь булево, поэтому разбираем явно.
+	debugMode = Boolean.parseBoolean(findProperty('modrinthDebug') ?: 'false')
+
+	// Те же зависимости, что в fabric.mod.json, чтобы страница и загрузчик модов не разошлись.
+	dependencies {
+		required.project 'P7dR8mSH'   // Fabric API
+		required.project '9s6osm5g'   // Cloth Config
+		optional.project 'mOgUt4GM'   // Mod Menu — в fabric.mod.json это recommends
 	}
 }

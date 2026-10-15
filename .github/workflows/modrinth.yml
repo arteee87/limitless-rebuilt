@@ -1,0 +1,80 @@
+# Публикует релиз на Modrinth после того, как он опубликован на GitHub.
+#
+# Триггер именно `release`, а не `push` тега: текст релиза на GitHub уже написан и вычитан, и он же
+# уходит в changelog версии на Modrinth. Ветки у нас по одной на версию Minecraft, и файл должен
+# лежать в той ветке, с которой снимается тег, — при порте на новую версию игры его надо добавить
+# и туда.
+#
+# Токен лежит в секрете MODRINTH_TOKEN и прокидывается через переменную окружения, которую Minotaur
+# читает сам. Права PAT: PROJECT_READ, VERSION_READ, VERSION_CREATE, VERSION_WRITE.
+#
+# configuration cache здесь включать нельзя: Minotaur помечен как несовместимый с ним.
+name: Publish to Modrinth
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Проверяет, что gradle-wrapper.jar совпадает с официальным Gradle. Файл в репозитории есть,
+      # иначе действие было бы лишним.
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # Номер версии на Modrinth собирается из gradle.properties, поэтому тег обязан совпадать с ним
+      # же — иначе под номером из одной версии уехал бы jar, собранный из другой, и заметить это
+      # можно было бы только скачав не то.
+      #
+      # tools/release-matrix.py --check здесь не годится: он сверяет все теги со всеми ветками
+      # разом, а checkout релизного события даёт отсоединённый HEAD глубиной в один коммит, где он
+      # не увидит ничего и отчитается «checked». Его место — локально, перед постановкой тега.
+      - name: Check the tag against gradle.properties
+        run: |
+          tag='${{ github.event.release.tag_name }}'
+          mod=$(sed -n 's/^mod_version=//p' gradle.properties)
+          mc=$(sed -n 's/^minecraft_version=//p' gradle.properties)
+          actual="${mod}+mc${mc}"
+
+          if [ "${tag#v}" != "${actual}" ]; then
+            echo "::error::tag ${tag} does not match gradle.properties (${actual})"
+            exit 1
+          fi
+
+          # тот же контракт, что у TAG в tools/release-matrix.py: без префикса релиз не попадёт
+          # в таблицу README
+          case "${tag}" in
+            v*) ;;
+            *) echo "::error::tag ${tag} is not shaped v<mod>+mc<minecraft>"; exit 1 ;;
+          esac
+
+          echo "tag ${tag} matches gradle.properties (${actual})"
+
+      - name: Build
+        run: ./gradlew build
+
+      - name: Publish to Modrinth
+        run: ./gradlew modrinth
+        env:
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+          # многострочный текст через -P с кавычками ломается, поэтому через ORG_GRADLE_PROJECT_*
+          ORG_GRADLE_PROJECT_modrinthChangelog: ${{ github.event.release.body }}
+          ORG_GRADLE_PROJECT_modrinthVersionType: ${{ github.event.release.prerelease && 'beta' || 'release' }}
