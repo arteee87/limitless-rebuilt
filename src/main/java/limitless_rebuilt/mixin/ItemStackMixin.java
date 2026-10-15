@@ -11,6 +11,7 @@ import limitless_rebuilt.enchantment.EnchantmentStats;
 import net.minecraft.entity.attribute.EntityAttributeModifier;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -33,6 +34,18 @@ import org.spongepowered.asm.mixin.injection.Redirect;
  */
 @Mixin(ItemStack.class)
 public abstract class ItemStackMixin {
+	/**
+	 * Every line this mod adds.
+	 *
+	 * <p>Vanilla paints its attribute lines per attribute — green for attack damage and speed, blue
+	 * for armour — so an unstyled line of our own lands in the middle of that block as white and the
+	 * tooltip reads as three different colours at once. {@link Formatting#BLUE} is the 0x5555FF
+	 * vanilla itself uses for the armour attributes; one colour for all of ours settles it. Do not
+	 * "fix" it to {@code GRAY}: that is the colour of an enchantment's own name, and these lines
+	 * answer a different question.
+	 */
+	private static final Formatting STAT_COLOR = Formatting.BLUE;
+
 	@Redirect(
 			method = "isEnchantable",
 			at = @At(
@@ -106,12 +119,12 @@ public abstract class ItemStackMixin {
 
 			if (bonus != 0.0F) {
 				lines.accept(Text.translatable("tooltip.limitless.attack_damage",
-						EnchantmentStats.format(bonus)));
+						EnchantmentStats.format(bonus)).formatted(STAT_COLOR));
 			}
 		}
 
 		for (EnchantmentStats.Stat stat : stats) {
-			lines.accept(Text.translatable(stat.key(), EnchantmentStats.format(stat.value())));
+			lines.accept(Text.translatable(stat.key(), EnchantmentStats.render(stat)).formatted(STAT_COLOR));
 		}
 
 		this.limitlessSawAttackDamage = false;

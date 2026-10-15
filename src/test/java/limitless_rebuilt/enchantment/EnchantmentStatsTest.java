@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.lang.reflect.Field;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import limitless_rebuilt.ModResources;
@@ -21,6 +22,39 @@ class EnchantmentStatsTest {
 		Field field = EnchantmentStats.class.getDeclaredField("CATEGORIES");
 		field.setAccessible(true);
 		return (Map<String, Object>) field.get(null);
+	}
+
+	@SuppressWarnings("unchecked")
+	private static List<Object> lines(String id) throws Exception {
+		Object entry = categories().get(id);
+		return entry == null ? List.of() : (List<Object>) entry;
+	}
+
+	private static Object only(String id) throws Exception {
+		List<Object> lines = lines(id);
+
+		assertEquals(1, lines.size(), id + " should earn exactly one line");
+
+		return lines.getFirst();
+	}
+
+	private static Object field(Object target, String name) throws Exception {
+		Field field = target.getClass().getDeclaredField(name);
+		field.setAccessible(true);
+		return field.get(target);
+	}
+
+	private static String key(Object category) throws Exception {
+		return (String) field(category, "key");
+	}
+
+	private static EnchantmentStats.Channel channelOf(Object category) throws Exception {
+		Object value = field(category, "value");
+		return EnchantmentStats.channelOf((EnchantmentStats.Value) value);
+	}
+
+	private static EnchantmentStats.Style styleOf(Object category) throws Exception {
+		return (EnchantmentStats.Style) field(category, "style");
 	}
 
 	/**
@@ -41,15 +75,11 @@ class EnchantmentStatsTest {
 			"minecraft:blast_protection, PROTECTION",
 			"minecraft:projectile_protection, PROTECTION",
 			"minecraft:feather_falling, PROTECTION",
+			"minecraft:density, DAMAGE",
 	})
-	@DisplayName("every enchantment that deserves a line has a category")
+	@DisplayName("every enchantment that deserves one line has a category")
 	void mappedEnchantments(String id, EnchantmentStats.Channel expected) throws Exception {
-		Object category = categories().get(id);
-		assertTrue(category != null, id + " has no category");
-
-		Field channel = category.getClass().getDeclaredField("channel");
-		channel.setAccessible(true);
-		assertEquals(expected, channel.get(category));
+		assertEquals(expected, channelOf(only(id)));
 	}
 
 	@Test
@@ -58,14 +88,51 @@ class EnchantmentStatsTest {
 		assertEquals(null, categories().get("minecraft:sharpness"));
 	}
 
-	/** The 24 enchantments deliberately left out, checked so none creeps back by accident. */
+	/**
+	 * Wind burst is the only enchantment earning two. Both answers come out of the same explosion
+	 * effect, but they are not quantities of the same thing: one scales the knockback dealt, the other
+	 * is the radius of the blast. Collapsing them onto a single row would mean picking one to hide.
+	 */
+	@Test
+	@DisplayName("wind burst earns two lines, from different channels")
+	void windBurstEarnsTwoLines() throws Exception {
+		List<Object> lines = lines("minecraft:wind_burst");
+
+		assertEquals(2, lines.size(), "wind burst should earn exactly two lines");
+		assertEquals(Set.of(EnchantmentStats.Channel.KNOCKBACK, EnchantmentStats.Channel.DAMAGE),
+				Set.of(channelOf(lines.get(0)), channelOf(lines.get(1))));
+		assertNotEquals(key(lines.get(0)), key(lines.get(1)));
+	}
+
+	/**
+	 * The mace lines answer a rate and a coefficient. A bare {@code +3} beside {@code +4.50 Damage to
+	 * Undead} reads as a different quantity, so these three — and only these three — carry two
+	 * decimals. Widening {@code format} itself would change every line already in front of players.
+	 */
+	@Test
+	@DisplayName("every mace line is fixed, and no other line is")
+	void onlyMaceLinesAreFixed() throws Exception {
+		Set<String> maceKeys = Set.of("tooltip.limitless.smash_damage",
+				"tooltip.limitless.self_knockback", "tooltip.limitless.impact_radius");
+
+		for (Object entry : categories().values()) {
+			for (Object category : (List<?>) entry) {
+				boolean mace = maceKeys.contains(key(category));
+				EnchantmentStats.Style expected = mace ? EnchantmentStats.Style.FIXED : EnchantmentStats.Style.PLAIN;
+
+				assertEquals(expected, styleOf(category), key(category));
+			}
+		}
+	}
+
+	/** The 29 enchantments deliberately left out, checked so none creeps back by accident. */
 	@ParameterizedTest
 	@ValueSource(strings = {
 			"minecraft:binding_curse", "minecraft:vanishing_curse", "minecraft:looting",
 			"minecraft:luck_of_the_sea", "minecraft:lure", "minecraft:loyalty", "minecraft:riptide",
-			"minecraft:quick_charge", "minecraft:density", "minecraft:silk_touch", "minecraft:fortune",
+			"minecraft:quick_charge", "minecraft:silk_touch", "minecraft:fortune",
 			"minecraft:infinity", "minecraft:unbreaking", "minecraft:mending", "minecraft:channeling",
-			"minecraft:flame", "minecraft:fire_aspect", "minecraft:frost_walker", "minecraft:wind_burst",
+			"minecraft:flame", "minecraft:fire_aspect", "minecraft:frost_walker",
 			"minecraft:thorns", "minecraft:multishot", "minecraft:piercing", "minecraft:breach",
 			"minecraft:soul_speed",
 	})
@@ -107,6 +174,24 @@ class EnchantmentStatsTest {
 		assertTrue(!formatted.contains("E") && !formatted.contains("e"), formatted);
 	}
 
+	@ParameterizedTest
+	@CsvSource({"0, 0.00", "3, 3.00", "3.5, 3.50", "-2.5, -2.50", "2.9, 2.90", "0.5, 0.50"})
+	@DisplayName("the fixed style keeps two decimals where the plain style drops them")
+	void fixedFormatting(double value, String expected) {
+		assertEquals(expected, EnchantmentStats.formatFixed((float) value));
+	}
+
+	/** The reason there are two formatters: the old text must not move. */
+	@ParameterizedTest
+	@CsvSource({"3, PLAIN, 3", "3, FIXED, 3.00", "3.5, PLAIN, 3.5", "3.5, FIXED, 3.50"})
+	@DisplayName("render picks the formatter the line asked for")
+	void rendering(float value, EnchantmentStats.Style style, String expected) {
+		EnchantmentStats.Stat stat = new EnchantmentStats.Stat(
+				EnchantmentStats.Channel.DAMAGE, "tooltip.limitless.knockback", value, style);
+
+		assertEquals(expected, EnchantmentStats.render(stat));
+	}
+
 	/**
 	 * The fault that shipped once: a line keyed on a translation that cannot hold the number has it
 	 * accepted and silently dropped, and nothing is raised — not by the compiler, not by Mixin, not
@@ -131,32 +216,24 @@ class EnchantmentStatsTest {
 	@Test
 	@DisplayName("the two knockback enchantments are mapped to the same line")
 	void knockbackEnchantmentsShareALine() throws Exception {
-		Object knockback = categories().get("minecraft:knockback");
-		Object punch = categories().get("minecraft:punch");
-
-		assertEquals(key(knockback), key(punch));
+		assertEquals(key(only("minecraft:knockback")), key(only("minecraft:punch")));
 	}
 
 	/** Protection and feather falling answer to different rows, so they must not be folded together. */
 	@Test
 	@DisplayName("protection and feather falling stay on separate lines")
 	void protectionLinesDiffer() throws Exception {
-		assertNotEquals(key(categories().get("minecraft:protection")),
-				key(categories().get("minecraft:feather_falling")));
+		assertNotEquals(key(only("minecraft:protection")), key(only("minecraft:feather_falling")));
 	}
 
-	private static String key(Object category) throws Exception {
-		Field field = category.getClass().getDeclaredField("key");
-		field.setAccessible(true);
-		return (String) field.get(category);
-	}
-
-	/** Every key {@code collect} can produce: one per category. */
+	/** Every key {@code collect} can produce: one per category, however many an enchantment earns. */
 	private static Set<String> lineKeys() throws Exception {
 		Set<String> keys = new LinkedHashSet<>();
 
-		for (Object category : categories().values()) {
-			keys.add(key(category));
+		for (Object entry : categories().values()) {
+			for (Object category : (List<?>) entry) {
+				keys.add(key(category));
+			}
 		}
 
 		return keys;

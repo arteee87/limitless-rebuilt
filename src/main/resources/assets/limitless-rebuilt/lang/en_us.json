@@ -118,6 +118,9 @@
 	"tooltip.limitless.protection.blast": "-%s%% Blast Damage Taken",
 	"tooltip.limitless.protection.projectile": "-%s%% Projectile Damage Taken",
 	"tooltip.limitless.protection.fall": "-%s%% Fall Damage Taken",
+	"tooltip.limitless.smash_damage": "+%s Smash Damage per Block Fallen",
+	"tooltip.limitless.self_knockback": "x%s Self Knockback",
+	"tooltip.limitless.impact_radius": "+%s Impact Damage Radius",
 	"toast.limitless-rebuilt.config_error.title": "Limitless Rebuilt",
 	"toast.limitless-rebuilt.config_error.description": "Failed to read limitless.json. See log for details. Default values are loaded."
 }

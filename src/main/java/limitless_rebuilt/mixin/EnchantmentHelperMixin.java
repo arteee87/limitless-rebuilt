@@ -61,9 +61,21 @@ public abstract class EnchantmentHelperMixin {
 	}
 
 	/**
-	 * Vanilla drops every enchantment conflicting with the one it just picked; with
-	 * {@code conflicts.generate} only the same enchantment is dropped, so a lap can offer several
-	 * mutually exclusive enchantments.
+	 * Vanilla drops every enchantment conflicting with the one it just picked. Three behaviours are
+	 * possible, and they are read in this order:
+	 *
+	 * <ul>
+	 * <li>{@code conflicts.generate} keeps everything except the pick itself, so a lap can offer
+	 * several mutually exclusive enchantments at once.
+	 * <li>{@code conflicts.merge} keeps everything. An offer the player cannot apply is no offer, and
+	 * applying is already permitted by that same switch — the anvil and
+	 * {@link EnchantmentUtil#mergeEnchantment} both key off it — so the lap and the application would
+	 * otherwise disagree about what is allowed.
+	 * <li>Neither, and vanilla decides.
+	 * </ul>
+	 *
+	 * <p>The second branch does nothing on purpose: keeping the conflicting candidates <em>is</em> the
+	 * whole change, and the call it replaces would be the only thing removing them.
 	 */
 	@Redirect(
 			method = "generateEnchantments",
@@ -77,7 +89,7 @@ public abstract class EnchantmentHelperMixin {
 
 		if (conflicts.generate) {
 			possibleEntries.removeIf(entry -> !entry.enchantment.equals(picked.enchantment));
-		} else {
+		} else if (!conflicts.merge) {
 			EnchantmentHelper.removeConflicts(possibleEntries, picked);
 		}
 	}

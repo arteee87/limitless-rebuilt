@@ -195,7 +195,8 @@ public enum Command implements CommandRegistrationCallback {
 
 		for (EnchantmentStats.Stat stat : collected) {
 			source.sendFeedback(() -> Text.literal("  " + stat.key()
-					+ " value=" + EnchantmentStats.format(stat.value())), false);
+					+ " style=" + stat.style()
+					+ " value=" + EnchantmentStats.render(stat)), false);
 		}
 
 		return com.mojang.brigadier.Command.SINGLE_SUCCESS;

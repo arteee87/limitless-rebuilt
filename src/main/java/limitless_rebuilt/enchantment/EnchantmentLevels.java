@@ -27,6 +27,17 @@ public final class EnchantmentLevels {
 	private static final RegistryKey<Registry<Enchantment>> KEY = RegistryKeys.ENCHANTMENT;
 	private static final int MAX_POWER_SCAN = 1000;
 
+	/**
+	 * Defaults that deliberately differ from the vanilla ceiling.
+	 *
+	 * <p>Vanilla caps wind burst at three because its knockback multiplier is a lookup table of
+	 * exactly three values — but a linear formula sits behind that table and starts being read from
+	 * level four on, so levels four and five are values the game can genuinely produce. The automatic
+	 * scan below cannot see this: wind burst has no {@code primary_items} and no growing
+	 * {@code minPower}, so nothing in its data ever trips.
+	 */
+	private static final Map<String, Integer> DEFAULT_MAX_LEVELS = Map.of("minecraft:wind_burst", 5);
+
 	private static volatile Registry<Enchantment> registry;
 
 	private EnchantmentLevels() {
@@ -60,7 +71,7 @@ public final class EnchantmentLevels {
 			EnchantmentEntry configured = configuration.entry(identifier);
 
 			if (configured == null) {
-				configured = new EnchantmentEntry(identifier, defaultMaxLevel(enchantment));
+				configured = new EnchantmentEntry(identifier, defaultMaxLevel(identifier, enchantment));
 				added.add(configured);
 			}
 
@@ -76,11 +87,20 @@ public final class EnchantmentLevels {
 	}
 
 	/**
-	 * Vanilla maximum, or {@link Integer#MAX_VALUE} when the enchantment can be levelled further
-	 * because its power requirement keeps growing, or its vanilla maximum when it is a single level
-	 * enchantment.
+	 * The default offered in the per-enchantment configuration for an enchantment the file has not
+	 * been told about yet.
+	 *
+	 * <p>{@link #DEFAULT_MAX_LEVELS} wins where it applies. Otherwise: {@link Integer#MAX_VALUE} when
+	 * the enchantment can be levelled further because its power requirement keeps growing, the
+	 * vanilla maximum when it is a single level enchantment, and the vanilla maximum otherwise.
 	 */
-	private static int defaultMaxLevel(Enchantment enchantment) {
+	private static int defaultMaxLevel(String identifier, Enchantment enchantment) {
+		Integer override = DEFAULT_MAX_LEVELS.get(identifier);
+
+		if (override != null) {
+			return override;
+		}
+
 		int original = EnchantmentLimits.originalMaxLevel(enchantment);
 
 		if (original <= 1) {
