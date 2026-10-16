@@ -6,6 +6,9 @@ import java.util.stream.Stream;
 import limitless_rebuilt.config.Configuration;
 import limitless_rebuilt.config.enchantment.entry.EnchantingConflicts;
 import limitless_rebuilt.enchantment.EnchantmentUtil;
+import net.minecraft.component.ComponentType;
+import net.minecraft.component.DataComponentTypes;
+import net.minecraft.component.type.EnchantableComponent;
 import net.minecraft.enchantment.Enchantment;
 import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.enchantment.EnchantmentLevelEntry;
@@ -51,13 +54,67 @@ public abstract class EnchantmentHelperMixin {
 			at = @At(value = "INVOKE", target = "Lnet/minecraft/item/ItemStack;isOf(Lnet/minecraft/item/Item;)Z")
 	)
 	private static boolean treatEnchantedBookAsBook(ItemStack stack, Item item) {
-		if (item == Items.BOOK
-				&& Configuration.instance.enchantment.reenchanting.allowEnchantedBooks()
-				&& stack.isOf(Items.ENCHANTED_BOOK)) {
+		if (item == Items.BOOK && stack.isOf(Items.ENCHANTED_BOOK)
+				&& Configuration.instance.enchantment.reenchanting.allowEnchantedBooks()) {
 			return true;
 		}
 
 		return stack.isOf(item);
+	}
+
+	/**
+	 * Makes an enchanted book answer the one question vanilla asks before it offers anything.
+	 *
+	 * <p>{@code generateEnchantments} opens with a direct read of the {@code enchantable} component and
+	 * returns an empty list when it is absent — before {@link #getPossibleEntries} is ever reached. That
+	 * read is the third one guarding this feature and the reason the previous two fixes looked like
+	 * they had worked and were not: the table offered its three laps at full levels and the buttons did
+	 * nothing, because there was nothing to put in them.
+	 *
+	 * <p>So the {@code enchantable} component has three readers that must agree, and they do not by
+	 * default: {@link net.minecraft.item.ItemStack#isEnchantable()} is answered for the book by
+	 * {@code ItemStackMixin}, {@code EnchantingBlocks#calculateRequiredExperienceLevel} by the shared
+	 * predicate, and this one by the handler below. All three now read
+	 * {@link EnchantmentUtil#isEnchantable}.
+	 *
+	 * <p>The value handed back is {@code 1}, which is what 1.21.4's deleted hook put on the stack. It is
+	 * read twice more below, as {@code EnchantableComponent#value()}, and only widens the level by one
+	 * per call.
+	 *
+	 * <p><b>Why the receiver is named and not the interface.</b> {@code ItemStack} inherits
+	 * {@code get} from {@code ComponentsAccess} rather than declaring it, so the declaring class and
+	 * the owner in the constant pool are two different things. Mixin matches an injection point against
+	 * the <em>instruction's</em> owner, which is the receiver, so this has to name {@code ItemStack}:
+	 * the refmap entry then reads {@code class_1799#method_58694}, which is what the call site says.
+	 * Naming the interface instead produces {@code class_9473#method_58694}, and that is what took the
+	 * game down — "Scanned 0 target(s)", and with {@code defaultRequire} a crash on world load, because
+	 * {@code EnchantmentHelper} is first loaded by an unrelated entity ticking.
+	 *
+	 * <p>The annotation processor cannot resolve the method on {@code ItemStack} and keeps the name it
+	 * derived from the interface. That part is fine: the name is right, and the owner is the one written
+	 * here. {@code check-mixins.py} used to reject this, because it verified that the intermediary class
+	 * <em>declares</em> the member and did not walk interfaces; it does now.
+	 *
+	 * <p>{@code ItemStack#get} is invoked exactly once in {@code generateEnchantments} and this is that
+	 * call, so no {@code ordinal} is needed. The handler returns {@code Object} rather than
+	 * {@code EnchantableComponent} so its erased descriptor matches the erased target method.
+	 */
+	@Redirect(
+			method = "generateEnchantments",
+			at = @At(
+					value = "INVOKE",
+					target = "Lnet/minecraft/item/ItemStack;get"
+							+ "(Lnet/minecraft/component/ComponentType;)Ljava/lang/Object;"
+			)
+	)
+	private static Object treatEnchantedBookAsEnchantable(ItemStack stack, ComponentType<?> type) {
+		Object present = stack.get(type);
+
+		if (present == null && type == DataComponentTypes.ENCHANTABLE && EnchantmentUtil.isEnchantable(stack)) {
+			return new EnchantableComponent(1);
+		}
+
+		return present;
 	}
 
 	/**
@@ -88,7 +145,7 @@ public abstract class EnchantmentHelperMixin {
 		EnchantingConflicts conflicts = Configuration.instance.enchantment.conflicts;
 
 		if (conflicts.generate) {
-			possibleEntries.removeIf(entry -> !entry.enchantment.equals(picked.enchantment));
+			possibleEntries.removeIf(entry -> !entry.enchantment().equals(picked.enchantment()));
 		} else if (!conflicts.merge) {
 			EnchantmentHelper.removeConflicts(possibleEntries, picked);
 		}

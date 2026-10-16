@@ -11,8 +11,6 @@ import limitless_rebuilt.config.enchantment.EnchantingBlockConfiguration;
 import limitless_rebuilt.config.enchantment.entry.radius.HorizontalRadius;
 import limitless_rebuilt.config.enchantment.entry.radius.VerticalRadius;
 import net.minecraft.block.Block;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.EnchantableComponent;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.RegistryKey;
@@ -169,9 +167,11 @@ public static float countEnchantingPower(World world, BlockPos center) {
 	 * one: the accumulated power is used directly instead of being a bookshelf count.
 	 */
 	public static int calculateRequiredExperienceLevel(Random random, int slotIndex, float enchantingPower, ItemStack stack) {
-		EnchantableComponent enchantable = stack.get(DataComponentTypes.ENCHANTABLE);
-
-		if (enchantable == null) {
+		// this used to test for the enchantable component and nothing else, which made the reenchanting
+		// of enchanted books impossible even though ItemStack.isEnchantable() had been made to agree:
+		// the table's own gate was open while this formula still answered zero, and the table skips a
+		// slot it was offered nothing for
+		if (!EnchantmentUtil.isEnchantable(stack)) {
 			return 0;
 		}
 

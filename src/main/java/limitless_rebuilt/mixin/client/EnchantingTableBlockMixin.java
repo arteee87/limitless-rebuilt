@@ -81,7 +81,7 @@ public abstract class EnchantingTableBlockMixin {
 	}
 
 	private static void particle(World world, BlockPos tablePos, Random random, int dx, int dy, int dz) {
-		world.addParticle(
+		world.addParticleClient(
 				ParticleTypes.ENCHANT,
 				tablePos.getX() + 0.5,
 				tablePos.getY() + 2.0,

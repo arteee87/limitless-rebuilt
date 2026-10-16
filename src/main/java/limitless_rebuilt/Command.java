@@ -15,8 +15,10 @@ import limitless_rebuilt.config.Configuration;
 import limitless_rebuilt.config.enchantment.entry.EnchantmentTooltipConfiguration;
 import limitless_rebuilt.enchantment.EnchantmentLimits;
 import limitless_rebuilt.enchantment.EnchantmentStats;
+import limitless_rebuilt.enchantment.EnchantmentUtil;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.command.CommandRegistryAccess;
+import net.minecraft.command.DefaultPermissions;
 import net.minecraft.enchantment.Enchantment;
 import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.enchantment.EnchantmentLevelEntry;
@@ -48,8 +50,11 @@ public enum Command implements CommandRegistrationCallback {
 			CommandDispatcher<ServerCommandSource> dispatcher,
 			CommandRegistryAccess registryAccess,
 			CommandManager.RegistrationEnvironment environment) {
+		// 1.21.11 replaced ServerCommandSource.hasPermissionLevel(int) with a permission predicate.
+		// DefaultPermissions.GAMEMASTERS is the constant for the old operator level 2: PermissionLevel
+		// numbers its enum ALL..OWNERS as 0..4, which is exactly the scale hasPermissionLevel used.
 		dispatcher.register(CommandManager.literal("limitless")
-				.requires(source -> source.hasPermissionLevel(2))
+				.requires(source -> source.getPermissions().hasPermission(DefaultPermissions.GAMEMASTERS))
 				.then(CommandManager.literal("reload")
 						.executes(context -> {
 							Configuration.reload();
@@ -107,7 +112,8 @@ public enum Command implements CommandRegistrationCallback {
 		for (ItemStack stack : List.of(new ItemStack(Items.DIAMOND_SWORD), new ItemStack(Items.BOOK))) {
 			source.sendFeedback(() -> Text.literal("--- " + stack.getItem().getName().getString()
 					+ ", enchantable=" + stack.contains(net.minecraft.component.DataComponentTypes.ENCHANTABLE)
-					+ ", isEnchantable=" + stack.isEnchantable()), false);
+					+ ", isEnchantable=" + stack.isEnchantable()
+					+ ", modAccepts=" + EnchantmentUtil.isEnchantable(stack)), false);
 
 			for (int power : POWERS) {
 				List<EnchantmentLevelEntry> entries = EnchantmentHelper.getPossibleEntries(
@@ -287,10 +293,10 @@ public enum Command implements CommandRegistrationCallback {
 				builder.append(", ");
 			}
 
-			RegistryEntry<Enchantment> enchantment = entries.get(i).enchantment;
+			RegistryEntry<Enchantment> enchantment = entries.get(i).enchantment();
 			builder.append(enchantment.getKey().map(key -> key.getValue().toString()).orElse("?"))
 					.append('=')
-					.append(entries.get(i).level);
+					.append(entries.get(i).level());
 		}
 
 		return builder.append(']').toString();

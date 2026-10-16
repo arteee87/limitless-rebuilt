@@ -44,8 +44,8 @@ class LimitlessConfigScreenLangTest {
 	/** The helpers that take a bare key and join a namespace onto it. */
 	private static final List<String> KEY_HELPERS = List.of("toggle", "field", "section");
 
-	/** 1.21.4 registers forty two enchantments and the screen shows a row each. */
-	private static final int SHIPPED_ENCHANTMENTS = 42;
+	/** 1.21.11 registers forty three enchantments and the screen shows a row each. */
+	private static final int SHIPPED_ENCHANTMENTS = 43;
 
 	@Test
 	@DisplayName("every key the screen builds is translated")

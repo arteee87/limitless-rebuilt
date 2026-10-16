@@ -44,7 +44,7 @@ public abstract class EnchantmentScreenMixin extends HandledScreen<EnchantmentSc
 
 	/** Set once per screen so the requirement is logged on open rather than on every frame. */
 	@Unique
-	private boolean limitlessLoggedRequirement;
+	private String limitlessLastRequirement;
 
 	/**
 	 * Bounds the level requirement the screen itself checks.
@@ -90,21 +90,29 @@ public abstract class EnchantmentScreenMixin extends HandledScreen<EnchantmentSc
 				Configuration.instance.enchantment.maxLevelRequirement);
 	}
 
-	/** Reports the requirement of every slot once the screen opens, to confirm the cap took hold. */
+	/**
+	 * Reports the requirement of every slot, to confirm the cap took hold.
+	 *
+	 * <p>The guard used to be a plain printed-once flag, which made this blind for the rest of the
+	 * session: swapping the item in the table re-offers completely different levels and nothing was
+	 * printed. A stack the mod refuses to enchant offers zero in all three slots, and that is precisely
+	 * the case worth reading — so the three lines are built first and compared, the same way the anvil
+	 * screen compares its own.
+	 */
 	@Inject(method = "render", at = @At("HEAD"))
 	private void logRequirement(DrawContext context, int mouseX, int mouseY, float delta, CallbackInfo info) {
-		if (this.limitlessLoggedRequirement || !Configuration.instance.debug || client.player == null) {
+		if (!Configuration.instance.debug || client.player == null) {
 			return;
 		}
 
-		this.limitlessLoggedRequirement = true;
 		int limit = Configuration.instance.enchantment.maxLevelRequirement;
+		StringBuilder builder = new StringBuilder();
 
 		for (int slot = 0; slot < handler.enchantmentPower.length; slot++) {
 			int offered = handler.enchantmentPower[slot];
 			int required = ExperienceUtil.capRequiredLevel(offered, limit);
 
-			LimitlessLogger.debug("slot %d: offered level=%d, required=%d (limit %d), player has %d -> %s"
+			builder.append("slot %d: offered level=%d, required=%d (limit %d), player has %d -> %s%n"
 					.formatted(
 							slot,
 							offered,
@@ -112,6 +120,13 @@ public abstract class EnchantmentScreenMixin extends HandledScreen<EnchantmentSc
 							limit,
 							client.player.experienceLevel,
 							client.player.experienceLevel >= required ? "affordable" : "NOT affordable"));
+		}
+
+		String message = builder.toString();
+
+		if (!message.equals(this.limitlessLastRequirement)) {
+			this.limitlessLastRequirement = message;
+			LimitlessLogger.debug(message.stripTrailing());
 		}
 	}
 

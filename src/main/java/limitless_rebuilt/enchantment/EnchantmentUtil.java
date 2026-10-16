@@ -4,6 +4,8 @@ import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import limitless_rebuilt.config.Configuration;
+import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.ItemEnchantmentsComponent;
 import net.minecraft.enchantment.Enchantment;
 import net.minecraft.enchantment.EnchantmentHelper;
@@ -121,6 +123,30 @@ public final class EnchantmentUtil {
 				.map(stream -> (int) stream.count())
 				.orElse(0);
 	}
+	/**
+	 * Whether the mod treats this stack as enchantable at all.
+	 *
+	 * <p>Two readers have to agree on that answer, and until 1.21.11 they did not. The enchanting table
+	 * asks {@code ItemStack#isEnchantable()}, while {@link EnchantmentUtil#candidateCount} is reached
+	 * only after our own level formula has already answered, and that formula reads the
+	 * {@code enchantable} component directly rather than calling the method. An enchanted book carries
+	 * neither, so patching one of the two left the other returning zero — and a slot the table skips.
+	 *
+	 * <p>1.21.4 avoided the question by adding the component to every enchanted book, from a hook Mojang
+	 * has since deleted. One predicate replaces both the component and the method: a stack qualifies
+	 * when it carries {@code enchantable}, or when it is an enchanted book and the flag is on. The flag
+	 * is read through {@code ReenchantingConfiguration#allowEnchantedBooks()}, which folds in
+	 * {@code reenchanting.enabled}, so both halves are honoured here.
+	 */
+	public static boolean isEnchantable(ItemStack stack) {
+		if (stack.contains(DataComponentTypes.ENCHANTABLE)) {
+			return true;
+		}
+
+		return Configuration.instance.enchantment.reenchanting.allowEnchantedBooks()
+				&& stack.contains(DataComponentTypes.STORED_ENCHANTMENTS);
+	}
+
 	/** Every enchantment a stack carries, keyed by identifier, for logging and for the GUI. */
 	public static Map<String, Integer> levels(ItemStack stack) {
 		Map<String, Integer> levels = new LinkedHashMap<>();
@@ -148,7 +174,7 @@ public final class EnchantmentUtil {
 			}
 
 			EnchantmentLevelEntry entry = entries.get(i);
-			builder.append(identifier(entry.enchantment)).append('=').append(entry.level);
+			builder.append(identifier(entry.enchantment())).append('=').append(entry.level());
 		}
 
 		if (entries.size() > shown) {

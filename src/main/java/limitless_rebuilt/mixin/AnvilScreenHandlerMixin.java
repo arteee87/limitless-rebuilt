@@ -8,6 +8,8 @@ import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.screen.AnvilScreenHandler;
+import java.util.HashSet;
+import java.util.Set;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Constant;
@@ -94,6 +96,23 @@ public abstract class AnvilScreenHandlerMixin {
 		return allowed;
 	}
 
+	/**
+	 * The conflicts already reported for the current combination in the two slots.
+	 *
+	 * <p>{@code canBeCombined} is asked once per pair of enchantments, and every recomputation asks
+	 * again, so an unguarded line repeats for each of them — nine lines for one item with three
+	 * conflicts, and {@code updateResult} alone runs several times per action. Clearing it per
+	 * recomputation therefore barely helped; the unit that matches what a reader wants is the
+	 * <em>combination</em>, so the set is cleared where the anvil input is compared against the last one.
+	 *
+	 * <p>The set is static because the redirect handler is: it wraps a static call, so Mixin requires a
+	 * static handler and there is no instance to hang state off. Both sides own a handler and both will
+	 * therefore report into it, and a pair seen by one side is not repeated by the other — which is the
+	 * point. The input, result, display and {@code canTakeOutput} lines still come out on both sides.
+	 */
+	@Unique
+	private static Set<String> limitlessConflictSeen = new HashSet<>();
+
 	/** Allows applying an enchantment that conflicts with one already on the item. */
 	@Redirect(
 			method = "updateResult",
@@ -109,8 +128,12 @@ public abstract class AnvilScreenHandlerMixin {
 		boolean allowed = combined || Configuration.instance.anvil.mergeConflicts;
 
 		if (!combined && allowed) {
-			LimitlessLogger.debug("anvil enchantments: %s and %s conflict -> allowed by mergeConflicts"
-					.formatted(name(first), name(second)));
+			String message = "anvil enchantments: %s and %s conflict -> allowed by mergeConflicts"
+					.formatted(name(first), name(second));
+
+			if (limitlessConflictSeen.add(message)) {
+				LimitlessLogger.debug(message);
+			}
 		}
 
 		return allowed;
@@ -196,6 +219,7 @@ public abstract class AnvilScreenHandlerMixin {
 
 		if (!message.equals(this.limitlessLastInput)) {
 			this.limitlessLastInput = message;
+			limitlessConflictSeen.clear();
 			LimitlessLogger.debug(message);
 		}
 	}

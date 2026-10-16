@@ -59,13 +59,35 @@ public abstract class EnchantmentScreenHandlerMixin {
 	@Unique
 	private Registry<Enchantment> limitlessRegistry;
 
+	/**
+	 * The last line each debug site printed, so an unchanged one is not repeated.
+	 *
+	 * <p>{@code onContentChanged} runs several times per tick while the screen is open, and
+	 * {@code generateEnchantments} once per slot on top of that, so an unguarded line repeats five or six
+	 * times for a single opening and buries everything around it. The anvil guards its lines this way.
+	 */
+	@Unique
+	private String limitlessLastOpened;
+
+	@Unique
+	private String limitlessLastPower;
+
+	/** Indexed by slot, because the three messages differ only in the slot number. */
+	@Unique
+	private String[] limitlessLastGenerated = new String[3];
+
 	@Inject(method = "onContentChanged", at = @At("HEAD"))
 	private void limitless_resetPower(CallbackInfo info) {
 		this.limitlessPower = -1.0F;
 
 		if (Configuration.instance.debug) {
-			LimitlessLogger.debug("table opened, item in slot 0 = %s"
-					.formatted(describeTarget(((EnchantmentScreenHandler) (Object) this).getSlot(0).getStack())));
+			String message = "table opened, item in slot 0 = %s"
+					.formatted(describeTarget(((EnchantmentScreenHandler) (Object) this).getSlot(0).getStack()));
+
+			if (!message.equals(this.limitlessLastOpened)) {
+				this.limitlessLastOpened = message;
+				LimitlessLogger.debug(message);
+			}
 		}
 	}
 
@@ -89,7 +111,7 @@ public abstract class EnchantmentScreenHandlerMixin {
 		if (this.limitlessPower < 0.0F) {
 			this.limitlessPower = EnchantingBlocks.countEnchantingPower(world, table);
 
-			LimitlessLogger.debug("enchanting power at %s = %s (ceiling %s, radius xz[%d..%d] y[%d..%d])"
+			String message = "enchanting power at %s = %s (ceiling %s, radius xz[%d..%d] y[%d..%d])"
 					.formatted(
 							table.toShortString(),
 							this.limitlessPower,
@@ -97,7 +119,12 @@ public abstract class EnchantmentScreenHandlerMixin {
 							Configuration.instance.enchantment.enchantingBlocks.radius.xz.min,
 							Configuration.instance.enchantment.enchantingBlocks.radius.xz.max,
 							Configuration.instance.enchantment.enchantingBlocks.radius.y.min,
-							Configuration.instance.enchantment.enchantingBlocks.radius.y.max));
+							Configuration.instance.enchantment.enchantingBlocks.radius.y.max);
+
+			if (!message.equals(this.limitlessLastPower)) {
+				this.limitlessLastPower = message;
+				LimitlessLogger.debug(message);
+			}
 		}
 
 		// vanilla already resolved the offset against the table before calling, so this is an
@@ -168,7 +195,7 @@ public abstract class EnchantmentScreenHandlerMixin {
 			int slot,
 			int level,
 			CallbackInfoReturnable<List<EnchantmentLevelEntry>> info) {
-		LimitlessLogger.debug("slot %d: level=%d stack=%s candidates=%d results=%d%s limits=%d"
+		String message = "slot %d: level=%d stack=%s candidates=%d results=%d%s limits=%d"
 				.formatted(
 						slot,
 						level,
@@ -176,7 +203,13 @@ public abstract class EnchantmentScreenHandlerMixin {
 						EnchantmentUtil.candidateCount(registryManager),
 						info.getReturnValue().size(),
 						EnchantmentUtil.describe(info.getReturnValue()),
-						EnchantmentLimits.size()));
+						EnchantmentLimits.size());
+
+		if (slot >= 0 && slot < this.limitlessLastGenerated.length
+				&& !message.equals(this.limitlessLastGenerated[slot])) {
+			this.limitlessLastGenerated[slot] = message;
+			LimitlessLogger.debug(message);
+		}
 	}
 
 
