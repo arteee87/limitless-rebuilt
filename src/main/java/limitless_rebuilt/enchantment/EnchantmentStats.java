@@ -2,6 +2,7 @@ package limitless_rebuilt.enchantment;
 
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -12,6 +13,7 @@ import limitless_rebuilt.config.enchantment.entry.EnchantmentTooltipConfiguratio
 import net.minecraft.component.ComponentType;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.EnchantmentEffectComponentTypes;
+import net.minecraft.component.type.AttributeModifierSlot;
 import net.minecraft.component.type.ItemEnchantmentsComponent;
 import net.minecraft.enchantment.Enchantment;
 import net.minecraft.enchantment.EnchantmentLevelBasedValue;
@@ -52,15 +54,25 @@ public final class EnchantmentStats {
 		PLAIN, FIXED
 	}
 
-	/** One tooltip line: a translation key and the number it takes. */
-	public record Stat(Channel channel, String key, float value, Style style) {
+	/**
+	 * One tooltip line: a translation key, the number it takes, and the group it belongs under.
+	 *
+	 * <p>The group is the {@code AttributeModifierSlot} of the enchantment the line came from, read
+	 * out of {@code Enchantment.Definition#slots()} rather than written here, so it follows the data
+	 * when a datapack moves an enchantment to another slot. {@code null} means the line has no heading
+	 * of its own, which is what vanilla does for the slots it gives no {@code item.modifiers} key.
+	 */
+	public record Stat(Channel channel, String key, float value, Style style, AttributeModifierSlot group) {
+		public Stat(Channel channel, String key, float value, Style style) {
+			this(channel, key, value, style, null);
+		}
 	}
 
 	/** What makes two lines the same line: everything but the number. */
-	private record Line(Channel channel, String key, Style style) {
+	private record Line(Channel channel, String key, Style style, int order, AttributeModifierSlot group) {
 	}
 
-	private record Category(Value value, String key, Style style) {
+	private record Category(Value value, String key, Style style, int order) {
 	}
 
 	/**
@@ -92,29 +104,37 @@ public final class EnchantmentStats {
 	 * <p>An enchantment usually earns one line. Wind burst earns two, because it both multiplies the
 	 * knockback it deals and sets the radius of the blast it causes, and the two answers are not
 	 * quantities of the same thing.
+	 *
+	 * <p>The last field of every row is the position of the enchantment in
+	 * {@code #minecraft:tooltip_order}, and it is what fixes the order of our lines. That tag is
+	 * vanilla's own answer to the same question for its own lines, so reading the position from it
+	 * keeps the two blocks consistent instead of inventing a second convention. The numbers are copied
+	 * rather than looked up: the tag is data, and a tooltip is the wrong place to go looking for data,
+	 * but the copy has nowhere to drift — a version that reorders the tag changes lines that already
+	 * print fine, and that is a cosmetic change we would rather notice on a screenshot.
 	 */
 	private static final Map<String, List<Category>> CATEGORIES = Map.ofEntries(
-			Map.entry("minecraft:smite", List.of(plain(Value.DAMAGE, "tooltip.limitless.damage.undead"))),
-			Map.entry("minecraft:bane_of_arthropods", List.of(plain(Value.DAMAGE, "tooltip.limitless.damage.arthropods"))),
-			Map.entry("minecraft:impaling", List.of(plain(Value.DAMAGE, "tooltip.limitless.damage.aquatic"))),
-			Map.entry("minecraft:power", List.of(plain(Value.DAMAGE, "tooltip.limitless.damage.projectile"))),
-			Map.entry("minecraft:knockback", List.of(plain(Value.KNOCKBACK, "tooltip.limitless.knockback"))),
-			Map.entry("minecraft:punch", List.of(plain(Value.KNOCKBACK, "tooltip.limitless.knockback"))),
-			Map.entry("minecraft:protection", List.of(plain(Value.PROTECTION, "tooltip.limitless.protection"))),
-			Map.entry("minecraft:fire_protection", List.of(plain(Value.PROTECTION, "tooltip.limitless.protection.fire"))),
-			Map.entry("minecraft:blast_protection", List.of(plain(Value.PROTECTION, "tooltip.limitless.protection.blast"))),
-			Map.entry("minecraft:projectile_protection", List.of(plain(Value.PROTECTION, "tooltip.limitless.protection.projectile"))),
-			Map.entry("minecraft:feather_falling", List.of(plain(Value.PROTECTION, "tooltip.limitless.protection.fall"))),
-			Map.entry("minecraft:density", List.of(new Category(Value.SMASH_DAMAGE, "tooltip.limitless.smash_damage", Style.FIXED))),
 			Map.entry("minecraft:wind_burst", List.of(
-					new Category(Value.WIND_BURST_KNOCKBACK, "tooltip.limitless.self_knockback", Style.FIXED),
-					new Category(Value.WIND_BURST_RADIUS, "tooltip.limitless.impact_radius", Style.FIXED))));
+					new Category(Value.WIND_BURST_KNOCKBACK, "tooltip.limitless.self_knockback", Style.FIXED, 5),
+					new Category(Value.WIND_BURST_RADIUS, "tooltip.limitless.impact_radius", Style.FIXED, 5))),
+			Map.entry("minecraft:smite", List.of(plain(Value.DAMAGE, "tooltip.limitless.damage.undead", 9))),
+			Map.entry("minecraft:bane_of_arthropods", List.of(plain(Value.DAMAGE, "tooltip.limitless.damage.arthropods", 10))),
+			Map.entry("minecraft:impaling", List.of(plain(Value.DAMAGE, "tooltip.limitless.damage.aquatic", 11))),
+			Map.entry("minecraft:power", List.of(plain(Value.DAMAGE, "tooltip.limitless.damage.projectile", 12))),
+			Map.entry("minecraft:density", List.of(new Category(Value.SMASH_DAMAGE, "tooltip.limitless.smash_damage", Style.FIXED, 13))),
+			Map.entry("minecraft:knockback", List.of(plain(Value.KNOCKBACK, "tooltip.limitless.knockback", 20))),
+			Map.entry("minecraft:punch", List.of(plain(Value.KNOCKBACK, "tooltip.limitless.knockback", 21))),
+			Map.entry("minecraft:protection", List.of(plain(Value.PROTECTION, "tooltip.limitless.protection", 22))),
+			Map.entry("minecraft:blast_protection", List.of(plain(Value.PROTECTION, "tooltip.limitless.protection.blast", 23))),
+			Map.entry("minecraft:fire_protection", List.of(plain(Value.PROTECTION, "tooltip.limitless.protection.fire", 24))),
+			Map.entry("minecraft:projectile_protection", List.of(plain(Value.PROTECTION, "tooltip.limitless.protection.projectile", 25))),
+			Map.entry("minecraft:feather_falling", List.of(plain(Value.PROTECTION, "tooltip.limitless.protection.fall", 26))));
 
 	private EnchantmentStats() {
 	}
 
-	private static Category plain(Value value, String key) {
-		return new Category(value, key, Style.PLAIN);
+	private static Category plain(Value value, String key, int order) {
+		return new Category(value, key, Style.PLAIN, order);
 	}
 
 	/**
@@ -133,7 +153,8 @@ public final class EnchantmentStats {
 	}
 
 	/**
-	 * Every line the tooltip should add below the attribute block, in a stable order.
+	 * Every line the tooltip should add below the attribute block, grouped and ordered the way vanilla
+	 * orders its own.
 	 *
 	 * <p>Two enchantments can answer to the same line — punch and knockback are both
 	 * {@code "+X Attack Knockback"} — so the numbers are accumulated per rendered line rather than per
@@ -142,6 +163,11 @@ public final class EnchantmentStats {
 	 *
 	 * <p>Nothing is read off {@code attribute_effects}: vanilla already prints those in its own block,
 	 * with the value and the unit, so a second copy here would only be a duplicate.
+	 *
+	 * <p><b>The order is not the order the enchantments come back in.</b> They come out of a hash map,
+	 * so two items differing only in a level could print their lines in two different orders. Sorting
+	 * by group and then by {@code #minecraft:tooltip_order} costs one comparison per line and makes the
+	 * block read the same on every stack.
 	 */
 	public static List<Stat> collect(ItemStack stack) {
 		EnchantmentTooltipConfiguration configuration = Configuration.instance.enchantment.tooltip;
@@ -167,28 +193,55 @@ public final class EnchantmentStats {
 
 			Enchantment enchantment = entry.getKey().value();
 			int level = entry.getIntValue();
+			AttributeModifierSlot group = groupOf(enchantment);
 
 			for (Category category : categories) {
 				if (isEnabled(configuration, channelOf(category.value()))) {
-					merge(merged, enchantment, level, category);
+					merge(merged, enchantment, level, group, category);
 				}
 			}
 		}
 
-		List<Stat> stats = new ArrayList<>(merged.size());
+		List<Map.Entry<Line, Float>> ordered = new ArrayList<>(merged.entrySet());
 
-		merged.forEach((line, value) -> {
-			if (value != 0.0F) {
-				stats.add(new Stat(line.channel(), line.key(), value, line.style()));
+		ordered.sort(Comparator.comparingInt((Map.Entry<Line, Float> line) -> groupRank(line.getKey().group()))
+				.thenComparingInt(line -> line.getKey().order()));
+
+		List<Stat> stats = new ArrayList<>(ordered.size());
+
+		for (Map.Entry<Line, Float> line : ordered) {
+			if (line.getValue() != 0.0F) {
+				stats.add(new Stat(line.getKey().channel(), line.getKey().key(), line.getValue(),
+						line.getKey().style(), line.getKey().group()));
 			}
-		});
+		}
 
 		return stats;
 	}
 
+	/**
+	 * The heading a line belongs under, taken from the enchantment it came from.
+	 *
+	 * <p>{@code Enchantment.Definition#slots()} is the same list vanilla reads when it decides whether
+	 * an enchantment applies to an equipment slot at all, so it is what puts our lines in the group
+	 * vanilla would have used. A line that came from two enchantments at once keeps the group of the
+	 * first; every pair that merges today sits in one slot anyway.
+	 */
+	private static AttributeModifierSlot groupOf(Enchantment enchantment) {
+		List<AttributeModifierSlot> slots = enchantment.definition().slots();
+
+		return slots.isEmpty() ? null : slots.get(0);
+	}
+
+	/** Where a group sits in the order vanilla walks its slots. */
+	private static int groupRank(AttributeModifierSlot group) {
+		return group == null ? Integer.MAX_VALUE : group.ordinal();
+	}
+
 	/** Adds one line, or leaves the map alone when the enchantment says nothing at this level. */
-	private static void merge(Map<Line, Float> merged, Enchantment enchantment, int level, Category category) {
-		Line line = new Line(channelOf(category.value()), category.key(), category.style());
+	private static void merge(Map<Line, Float> merged, Enchantment enchantment, int level,
+			AttributeModifierSlot group, Category category) {
+		Line line = new Line(channelOf(category.value()), category.key(), category.style(), category.order(), group);
 
 		switch (category.value()) {
 			case WIND_BURST_KNOCKBACK -> windBurst(enchantment)
