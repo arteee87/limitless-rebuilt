@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -46,6 +47,39 @@ class EnchantmentStatsTest {
 
 	private static String key(Object category) throws Exception {
 		return (String) field(category, "key");
+	}
+
+	private static int orderOf(String id) throws Exception {
+		Method method = EnchantmentStats.class.getDeclaredMethod("orderOf", String.class);
+		method.setAccessible(true);
+		return (int) method.invoke(null, id);
+	}
+
+	/**
+	 * The order of the lines has to be a property of the enchantment, not of the hash map the
+	 * enchantments happen to come back in. Two items differing only in a level used to print the same
+	 * lines in two different orders, and a screenshot was the only thing that caught it.
+	 *
+	 * <p>What this guards is that the order is total: every mapped enchantment gets its own position,
+	 * and those positions run in the order this class declares its rows. That declaration is also the
+	 * order {@code orderOf} falls back to before {@code #minecraft:tooltip_order} has been read, which
+	 * is the state this runs in — nothing here calls {@code reload}.
+	 */
+	@Test
+	@DisplayName("every mapped enchantment has its own place in the line order")
+	void lineOrderIsTotal() throws Exception {
+		List<String> declared = List.copyOf(categories().keySet());
+
+		assertEquals(13, declared.size(), "a row was added or dropped without the test following");
+
+		int previous = -1;
+
+		for (String id : declared) {
+			int position = orderOf(id);
+
+			assertTrue(position > previous, id + " does not sort after the row declared before it");
+			previous = position;
+		}
 	}
 
 	private static EnchantmentStats.Channel channelOf(Object category) throws Exception {

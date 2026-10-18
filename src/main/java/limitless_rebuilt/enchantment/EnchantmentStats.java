@@ -2,6 +2,7 @@ package limitless_rebuilt.enchantment;
 
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -24,7 +25,14 @@ import net.minecraft.enchantment.effect.TargetedEnchantmentEffect;
 import net.minecraft.enchantment.effect.entity.ExplodeEnchantmentEffect;
 import net.minecraft.enchantment.effect.value.AddEnchantmentEffect;
 import net.minecraft.item.ItemStack;
+import net.minecraft.registry.DynamicRegistryManager;
+import net.minecraft.registry.Registry;
+import net.minecraft.registry.RegistryKey;
+import net.minecraft.registry.RegistryKeys;
 import net.minecraft.registry.entry.RegistryEntry;
+import net.minecraft.registry.entry.RegistryEntryList;
+import net.minecraft.registry.tag.EnchantmentTags;
+import java.util.stream.Stream;
 
 /**
  * What the enchantments on a stack actually add, for display in the item tooltip.
@@ -72,7 +80,7 @@ public final class EnchantmentStats {
 	private record Line(Channel channel, String key, Style style, int order, AttributeModifierSlot group) {
 	}
 
-	private record Category(Value value, String key, Style style, int order) {
+	private record Category(Value value, String key, Style style) {
 	}
 
 	/**
@@ -98,43 +106,125 @@ public final class EnchantmentStats {
 	private static final String SHARPNESS = "minecraft:sharpness";
 
 	/**
-	 * Enchantment identifier to the lines it earns. The four damage enchantments share a channel but
-	 * answer to different targets, so they get their own rows; knockback and punch share one.
+	 * Enchantment identifier to the lines it earns, in the order they are written down here.
+	 *
+	 * <p>The four damage enchantments share a channel but answer to different targets, so they get
+	 * their own rows; knockback and punch share one.
 	 *
 	 * <p>An enchantment usually earns one line. Wind burst earns two, because it both multiplies the
 	 * knockback it deals and sets the radius of the blast it causes, and the two answers are not
 	 * quantities of the same thing.
 	 *
-	 * <p>The last field of every row is the position of the enchantment in
-	 * {@code #minecraft:tooltip_order}, and it is what fixes the order of our lines. That tag is
-	 * vanilla's own answer to the same question for its own lines, so reading the position from it
-	 * keeps the two blocks consistent instead of inventing a second convention. The numbers are copied
-	 * rather than looked up: the tag is data, and a tooltip is the wrong place to go looking for data,
-	 * but the copy has nowhere to drift — a version that reorders the tag changes lines that already
-	 * print fine, and that is a cosmetic change we would rather notice on a screenshot.
+	 * <p><b>This declaration order is the fallback, not the answer.</b> The real order comes from
+	 * {@code #minecraft:tooltip_order}, read once by {@link #reload(DynamicRegistryManager)}: vanilla
+	 * already answers this exact question for its own enchantment lines, and following its answer
+	 * keeps the two blocks consistent rather than inventing a second convention. The order written
+	 * down here only decides what happens before that has run — a {@code /limitless} command on a
+	 * dedicated server before the world starts, which no tooltip can reach — and it is there so that
+	 * the order is total from the first call rather than undefined until the tag arrives.
+	 *
+	 * <p>Unmodifiable but not copied: {@link Map#of} and {@link Map#copyOf} both build an unordered
+	 * map, and taking the order away here would defeat the reason this is a {@link LinkedHashMap}.
 	 */
-	private static final Map<String, List<Category>> CATEGORIES = Map.ofEntries(
-			Map.entry("minecraft:wind_burst", List.of(
-					new Category(Value.WIND_BURST_KNOCKBACK, "tooltip.limitless.self_knockback", Style.FIXED, 5),
-					new Category(Value.WIND_BURST_RADIUS, "tooltip.limitless.impact_radius", Style.FIXED, 5))),
-			Map.entry("minecraft:smite", List.of(plain(Value.DAMAGE, "tooltip.limitless.damage.undead", 9))),
-			Map.entry("minecraft:bane_of_arthropods", List.of(plain(Value.DAMAGE, "tooltip.limitless.damage.arthropods", 10))),
-			Map.entry("minecraft:impaling", List.of(plain(Value.DAMAGE, "tooltip.limitless.damage.aquatic", 11))),
-			Map.entry("minecraft:power", List.of(plain(Value.DAMAGE, "tooltip.limitless.damage.projectile", 12))),
-			Map.entry("minecraft:density", List.of(new Category(Value.SMASH_DAMAGE, "tooltip.limitless.smash_damage", Style.FIXED, 13))),
-			Map.entry("minecraft:knockback", List.of(plain(Value.KNOCKBACK, "tooltip.limitless.knockback", 20))),
-			Map.entry("minecraft:punch", List.of(plain(Value.KNOCKBACK, "tooltip.limitless.knockback", 21))),
-			Map.entry("minecraft:protection", List.of(plain(Value.PROTECTION, "tooltip.limitless.protection", 22))),
-			Map.entry("minecraft:blast_protection", List.of(plain(Value.PROTECTION, "tooltip.limitless.protection.blast", 23))),
-			Map.entry("minecraft:fire_protection", List.of(plain(Value.PROTECTION, "tooltip.limitless.protection.fire", 24))),
-			Map.entry("minecraft:projectile_protection", List.of(plain(Value.PROTECTION, "tooltip.limitless.protection.projectile", 25))),
-			Map.entry("minecraft:feather_falling", List.of(plain(Value.PROTECTION, "tooltip.limitless.protection.fall", 26))));
+	private static final Map<String, List<Category>> CATEGORIES = categories();
+
+	private static Map<String, List<Category>> categories() {
+		Map<String, List<Category>> map = new LinkedHashMap<>();
+
+		map.put("minecraft:wind_burst", List.of(
+				new Category(Value.WIND_BURST_KNOCKBACK, "tooltip.limitless.self_knockback", Style.FIXED),
+				new Category(Value.WIND_BURST_RADIUS, "tooltip.limitless.impact_radius", Style.FIXED)));
+		map.put("minecraft:smite", List.of(plain(Value.DAMAGE, "tooltip.limitless.damage.undead")));
+		map.put("minecraft:bane_of_arthropods", List.of(plain(Value.DAMAGE, "tooltip.limitless.damage.arthropods")));
+		map.put("minecraft:impaling", List.of(plain(Value.DAMAGE, "tooltip.limitless.damage.aquatic")));
+		map.put("minecraft:power", List.of(plain(Value.DAMAGE, "tooltip.limitless.damage.projectile")));
+		map.put("minecraft:density", List.of(new Category(Value.SMASH_DAMAGE, "tooltip.limitless.smash_damage", Style.FIXED)));
+		map.put("minecraft:knockback", List.of(plain(Value.KNOCKBACK, "tooltip.limitless.knockback")));
+		map.put("minecraft:punch", List.of(plain(Value.KNOCKBACK, "tooltip.limitless.knockback")));
+		map.put("minecraft:protection", List.of(plain(Value.PROTECTION, "tooltip.limitless.protection")));
+		map.put("minecraft:blast_protection", List.of(plain(Value.PROTECTION, "tooltip.limitless.protection.blast")));
+		map.put("minecraft:fire_protection", List.of(plain(Value.PROTECTION, "tooltip.limitless.protection.fire")));
+		map.put("minecraft:projectile_protection", List.of(plain(Value.PROTECTION, "tooltip.limitless.protection.projectile")));
+		map.put("minecraft:feather_falling", List.of(plain(Value.PROTECTION, "tooltip.limitless.protection.fall")));
+
+		return Collections.unmodifiableMap(map);
+	}
+
+	/**
+	 * Where each mapped enchantment sits in {@code #minecraft:tooltip_order}.
+	 *
+	 * <p>Empty until {@link #reload(DynamicRegistryManager)} has run, and published as one
+	 * {@code volatile} assignment so a reader sees either the old table or the new one and never a
+	 * half-built one. {@code volatile} plus an immutable value is the same bargain
+	 * {@code EnchantmentLevels} makes with its registry.
+	 */
+	private static volatile Map<String, Integer> order = Map.of();
+
+	/**
+	 * Reads the tooltip order out of the dynamic registries. Called where the mod binds to a registry
+	 * in the first place: on server start and on client join, the same two places that hand a manager
+	 * to {@code EnchantmentLevels}.
+	 *
+	 * <p>The tag comes first and the rest of the registry follows, so every enchantment has a
+	 * position whether or not the tag names it — which a datapack free to remove entries from a tag
+	 * is entitled to do. The tail goes in through {@code putIfAbsent}, or a tagged enchantment would
+	 * be given a second position and push everything after it along.
+	 */
+	public static void reload(DynamicRegistryManager manager) {
+		if (manager == null) {
+			return;
+		}
+
+		Registry<Enchantment> registry = manager.getOrThrow(RegistryKeys.ENCHANTMENT);
+		List<RegistryEntry<Enchantment>> tagged = registry.getOptional(EnchantmentTags.TOOLTIP_ORDER)
+				.map(RegistryEntryList::stream)
+				.map(Stream::toList)
+				.orElseGet(List::of);
+		Map<String, Integer> positions = new LinkedHashMap<>();
+		int position = 0;
+
+		for (RegistryEntry<Enchantment> entry : tagged) {
+			positions.put(identifier(entry), position++);
+		}
+
+		for (RegistryKey<Enchantment> key : registry.getEntrySet().stream()
+				.map(Map.Entry::getKey)
+				.toList()) {
+			positions.putIfAbsent(key.getValue().toString(), position++);
+		}
+
+		order = Collections.unmodifiableMap(positions);
+	}
+
+	/**
+	 * The position of an enchantment in the tooltip order, falling back to where this class writes it
+	 * down. A miss is only possible before the registries have been read.
+	 */
+	private static int orderOf(String id) {
+		Integer position = order.get(id);
+
+		if (position != null) {
+			return position;
+		}
+
+		int fallback = 0;
+
+		for (String declared : CATEGORIES.keySet()) {
+			if (declared.equals(id)) {
+				return fallback;
+			}
+
+			fallback++;
+		}
+
+		return Integer.MAX_VALUE;
+	}
 
 	private EnchantmentStats() {
 	}
 
-	private static Category plain(Value value, String key, int order) {
-		return new Category(value, key, Style.PLAIN, order);
+	private static Category plain(Value value, String key) {
+		return new Category(value, key, Style.PLAIN);
 	}
 
 	/**
@@ -194,10 +284,11 @@ public final class EnchantmentStats {
 			Enchantment enchantment = entry.getKey().value();
 			int level = entry.getIntValue();
 			AttributeModifierSlot group = groupOf(enchantment);
+			int position = orderOf(id);
 
 			for (Category category : categories) {
 				if (isEnabled(configuration, channelOf(category.value()))) {
-					merge(merged, enchantment, level, group, category);
+					merge(merged, enchantment, level, group, position, category);
 				}
 			}
 		}
@@ -240,8 +331,8 @@ public final class EnchantmentStats {
 
 	/** Adds one line, or leaves the map alone when the enchantment says nothing at this level. */
 	private static void merge(Map<Line, Float> merged, Enchantment enchantment, int level,
-			AttributeModifierSlot group, Category category) {
-		Line line = new Line(channelOf(category.value()), category.key(), category.style(), category.order(), group);
+			AttributeModifierSlot group, int position, Category category) {
+		Line line = new Line(channelOf(category.value()), category.key(), category.style(), position, group);
 
 		switch (category.value()) {
 			case WIND_BURST_KNOCKBACK -> windBurst(enchantment)

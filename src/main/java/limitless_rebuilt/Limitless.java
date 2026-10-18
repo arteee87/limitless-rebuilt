@@ -7,6 +7,7 @@ import limitless_rebuilt.enchantment.EnchantmentUtil;
 import limitless_rebuilt.config.Configuration;
 import limitless_rebuilt.config.gui.LimitlessConfigScreen;
 import limitless_rebuilt.enchantment.EnchantmentLevels;
+import limitless_rebuilt.enchantment.EnchantmentStats;
 import limitless_rebuilt.enchantment.EnchantingBlocks;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.api.EnvType;
@@ -55,7 +56,11 @@ public final class Limitless implements ModInitializer, ClientModInitializer {
 		}
 
 		CommandRegistrationCallback.EVENT.register(Command.INSTANCE);
-		ServerLifecycleEvents.SERVER_STARTING.register(server -> EnchantmentLevels.reload(server.getRegistryManager()));
+		ServerLifecycleEvents.SERVER_STARTING.register(server -> {
+			DynamicRegistryManager manager = server.getRegistryManager();
+			EnchantmentLevels.reload(manager);
+			EnchantmentStats.reload(manager);
+		});
 	}
 
 	@Environment(EnvType.CLIENT)
@@ -67,6 +72,7 @@ public final class Limitless implements ModInitializer, ClientModInitializer {
 		ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
 			DynamicRegistryManager manager = client.getNetworkHandler().getRegistryManager();
 			EnchantmentLevels.reload(manager);
+			EnchantmentStats.reload(manager);
 
 			if (Configuration.instance.debug) {
 				selfCheck(manager);
