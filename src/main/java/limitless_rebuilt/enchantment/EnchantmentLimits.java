@@ -8,7 +8,7 @@ import net.minecraft.enchantment.Enchantment;
  * Per enchantment level limits.
  *
  * <p>1.19.3 stored two extra fields on every {@code Enchantment} instance, which needed bytecode
- * rewriting because the class could not be mixed into directly. In 1.21.4 {@code Enchantment} is a
+ * rewriting because the class could not be mixed into directly. In 1.21.11 {@code Enchantment} is a
  * {@code final record}, so the state lives here instead and {@code EnchantmentMixin} only reads it.
  *
  * <p>Keys are compared by identity: {@code Enchantment} is a record, so its generated

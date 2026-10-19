@@ -56,6 +56,10 @@ public final class Limitless implements ModInitializer, ClientModInitializer {
 		}
 
 		CommandRegistrationCallback.EVENT.register(Command.INSTANCE);
+		// Both of these read out of the dynamic registries and both need a manager, on the server and
+		// on the client alike. Neither has a no-argument variant: the configuration watcher reloads
+		// the levels, because those live in a file, but the tooltip order lives in a tag that a file
+		// cannot change.
 		ServerLifecycleEvents.SERVER_STARTING.register(server -> {
 			DynamicRegistryManager manager = server.getRegistryManager();
 			EnchantmentLevels.reload(manager);
@@ -68,7 +72,8 @@ public final class Limitless implements ModInitializer, ClientModInitializer {
 	public void onInitializeClient() {
 		// CLIENT_STARTED fires before the client has a network handler, so the dynamic registries
 		// are still empty there; JOIN fires once the world is loaded and works for an integrated
-		// server as well
+		// server as well. The client needs the same two reloads as the server, because it draws the
+		// tooltips itself and never sees the integrated server's registry manager.
 		ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
 			DynamicRegistryManager manager = client.getNetworkHandler().getRegistryManager();
 			EnchantmentLevels.reload(manager);

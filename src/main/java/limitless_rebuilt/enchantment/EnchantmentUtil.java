@@ -21,7 +21,7 @@ import net.minecraft.registry.tag.EnchantmentTags;
  * Enchantment merging used by the enchanting table.
  *
  * <p>The 1.19.3 implementation read and wrote the {@code StoredEnchantments} NBT list and truncated
- * the level to a {@code short} on the way; 1.21.4 keeps the same data in
+ * the level to a {@code short} on the way; 1.21.11 keeps the same data in
  * {@link ItemEnchantmentsComponent}, where the level is an {@code int} and never truncates.
  */
 public final class EnchantmentUtil {

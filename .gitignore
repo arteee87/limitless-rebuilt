@@ -1,12 +1,12 @@
-# сборка и кэш Gradle
+# build output and Gradle cache
 build/
 .gradle/
 
-# локальный запуск: конфиг, мир, логи
+# local run: config, world, logs
 run/
 logs/
 
-# инструменты разработки
+# development tools
 .idea/
 *.iml
 .vscode/
@@ -15,11 +15,9 @@ logs/
 .project
 .settings/
 
-# секреты: PAT Modrinth и GitHub. Хранятся в .env уровнем выше, но если файл появится здесь — он
-# обязан остаться незакоммиченным
 .env
 .env.*
 
-# прочее
+# everything else
 .DS_Store
 Thumbs.db

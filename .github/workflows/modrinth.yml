@@ -1,14 +1,13 @@
-# Публикует релиз на Modrinth после того, как он опубликован на GitHub.
+# Publishes a release to Modrinth once the GitHub release it points at is published.
 #
-# Триггер именно `release`, а не `push` тега: текст релиза на GitHub уже написан и вычитан, и он же
-# уходит в changelog версии на Modrinth. Ветки у нас по одной на версию Minecraft, и файл должен
-# лежать в той ветке, с которой снимается тег, — при порте на новую версию игры его надо добавить
-# и туда.
+# The trigger is `release`, not a tag push: the release text has already been written and proofread
+# on GitHub, and the same text becomes the version changelog on Modrinth. There is one branch per
+# Minecraft version, so this file has to be carried over when the mod is ported to a new version.
 #
-# Токен лежит в секрете MODRINTH_TOKEN и прокидывается через переменную окружения, которую Minotaur
-# читает сам. Права PAT: PROJECT_READ, VERSION_READ, VERSION_CREATE, VERSION_WRITE.
+# The token lives in the MODRINTH_TOKEN secret and is passed through as the environment variable
+# Minotaur reads. PAT scopes: PROJECT_READ, VERSION_READ, VERSION_CREATE, VERSION_WRITE.
 #
-# configuration cache здесь включать нельзя: Minotaur помечен как несовместимый с ним.
+# Do not turn the configuration cache on here: Minotaur declares itself incompatible with it.
 name: Publish to Modrinth
 
 on:
@@ -26,8 +25,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Проверяет, что gradle-wrapper.jar совпадает с официальным Gradle. Файл в репозитории есть,
-      # иначе действие было бы лишним.
+      # Checks that gradle-wrapper.jar matches the official Gradle build. The file is in the
+      # repository, so without this the action would have nothing to compare against.
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@v4
 
@@ -40,13 +39,14 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      # Номер версии на Modrinth собирается из gradle.properties, поэтому тег обязан совпадать с ним
-      # же — иначе под номером из одной версии уехал бы jar, собранный из другой, и заметить это
-      # можно было бы только скачав не то.
+      # The version number on Modrinth is assembled from gradle.properties, so the tag has to match
+      # it exactly. Otherwise a jar built from one version would be published under the number of
+      # another, and the only way to notice would be to download the wrong thing.
       #
-      # tools/release-matrix.py --check здесь не годится: он сверяет все теги со всеми ветками
-      # разом, а checkout релизного события даёт отсоединённый HEAD глубиной в один коммит, где он
-      # не увидит ничего и отчитается «checked». Его место — локально, перед постановкой тега.
+      # tools/release-matrix.py --check is not usable here: it cross-checks every tag against every
+      # branch at once, while the checkout of a release event gives a detached HEAD one commit deep,
+      # where it would see nothing and report "checked" anyway. Its place is locally, before the tag
+      # is set.
       - name: Check the tag against gradle.properties
         run: |
           tag='${{ github.event.release.tag_name }}'
@@ -59,8 +59,8 @@ jobs:
             exit 1
           fi
 
-          # тот же контракт, что у TAG в tools/release-matrix.py: без префикса релиз не попадёт
-          # в таблицу README
+          # same contract as TAG in tools/release-matrix.py: without the prefix the release will
+          # not appear in the README table
           case "${tag}" in
             v*) ;;
             *) echo "::error::tag ${tag} is not shaped v<mod>+mc<minecraft>"; exit 1 ;;
@@ -75,6 +75,7 @@ jobs:
         run: ./gradlew modrinth
         env:
           MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
-          # многострочный текст через -P с кавычками ломается, поэтому через ORG_GRADLE_PROJECT_*
+          # a multi-line value breaks through -P because of the quotes, so it goes in through
+          # ORG_GRADLE_PROJECT_* instead
           ORG_GRADLE_PROJECT_modrinthChangelog: ${{ github.event.release.body }}
           ORG_GRADLE_PROJECT_modrinthVersionType: ${{ github.event.release.prerelease && 'beta' || 'release' }}

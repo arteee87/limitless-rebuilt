@@ -15,7 +15,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * the configured value and {@code getMaxPower(int)} always returned {@link Integer#MAX_VALUE}; the
  * same result is reached here with two injections.
  *
- * <p>{@code Enchantment} is a {@code final record} in 1.21.4, so the per instance state lives in
+ * <p>{@code Enchantment} is a {@code final record} in 1.21.11, so the per instance state lives in
  * {@link EnchantmentLimits} rather than in {@code @Unique} fields.
  */
 @Mixin(Enchantment.class)

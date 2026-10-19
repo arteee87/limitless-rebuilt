@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
  * Removes the hard 255 level ceiling of {@link ItemEnchantmentsComponent}.
  *
  * <p>1.19.3 stored the level as a NBT {@code short} and the mod only had to redirect the two
- * {@code NbtCompound#putShort} calls that truncated it. 1.21.4 keeps the levels in a component and
+ * {@code NbtCompound#putShort} calls that truncated it. 1.21.11 keeps the levels in a component and
  * guards them in three places that the original mod never had to deal with:
  *
  * <ol>
