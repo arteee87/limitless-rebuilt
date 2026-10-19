@@ -83,7 +83,9 @@ class ConfigSerializerTest {
 		assertTrue(configuration.enchantment.entry("minecraft:sharpness").useGlobalMaxLevel);
 		assertFalse(configuration.anvil.mergeConflicts);
 		assertTrue(configuration.anvil.mergeIncompatible);
-		assertFalse(configuration.anvil.fixedCost);
+		// fixedCost is gone; the cap is the new mechanic and defaults to on at 40
+		assertTrue(configuration.anvil.costLimitEnabled);
+		assertEquals(40, configuration.anvil.costLimit);
 		assertEquals(200, configuration.anvil.levelLimit);
 		assertEquals(CostDisplay.APPEND, configuration.anvil.normalization.display);
 		assertFalse(configuration.anvil.normalization.enabled);

@@ -2,6 +2,7 @@ package limitless_rebuilt.mixin;
 
 import limitless_rebuilt.LimitlessLogger;
 import limitless_rebuilt.config.Configuration;
+import limitless_rebuilt.config.anvil.AnvilConfiguration;
 import limitless_rebuilt.enchantment.ExperienceUtil;
 import net.minecraft.enchantment.Enchantment;
 import net.minecraft.entity.player.PlayerEntity;
@@ -65,9 +66,9 @@ public abstract class AnvilScreenHandlerMixin {
 	 */
 	@Inject(method = "getNextCost", at = @At("HEAD"), cancellable = true)
 	private static void limitless_getNextCost(int cost, CallbackInfoReturnable<Integer> info) {
-		if (Configuration.instance.anvil.fixedCost) {
-			info.setReturnValue(0);
-		}
+		// The repair cost never grows: vanilla's getNextCost doubles it on every use, which is what
+		// makes the anvil cost spiral. Replacing it with zero keeps the cost constant.
+		info.setReturnValue(0);
 	}
 
 	/**
@@ -165,7 +166,7 @@ public abstract class AnvilScreenHandlerMixin {
 	 */
 	@ModifyConstant(method = "updateResult", constant = @Constant(intValue = VANILLA_MINIMUM_COST, ordinal = 1))
 	private int modifyRenameThreshold(int forty) {
-		return Configuration.instance.anvil.levelLimit;
+		return Configuration.instance.anvil.effectiveLevelLimit();
 	}
 
 	/**
@@ -174,7 +175,25 @@ public abstract class AnvilScreenHandlerMixin {
 	 */
 	@ModifyConstant(method = "updateResult", constant = @Constant(intValue = VANILLA_MINIMUM_COST, ordinal = 2))
 	private int modifyResultThreshold(int forty) {
-		return Configuration.instance.anvil.levelLimit;
+		return Configuration.instance.anvil.effectiveLevelLimit();
+	}
+
+	/**
+	 * Caps the calculated cost when the option is on. The clamp at offset 862 is the single place the
+	 * final cost is computed (a long, clamped to the int range), so capping its result covers repair,
+	 * combination and rename in one place and the value the gate, canTakeOutput, onTakeOutput and the
+	 * client display all see is the capped one.
+	 */
+	@ModifyExpressionValue(
+			method = "updateResult",
+			at = @At(
+					value = "INVOKE",
+					target = "Lnet/minecraft/util/math/MathHelper;clamp(JJJ)J"
+			)
+	)
+	private long limitCost(long cost) {
+		AnvilConfiguration anvil = Configuration.instance.anvil;
+		return anvil.costLimitEnabled ? Math.min(cost, anvil.costLimit) : cost;
 	}
 
 	/**
@@ -210,12 +229,14 @@ public abstract class AnvilScreenHandlerMixin {
 		AnvilScreenHandler handler = (AnvilScreenHandler) (Object) this;
 
 		String message = LimitlessLogger.side()
-				+ " anvil input: slot0=%s slot1=%s mergeConflicts=%s mergeIncompatible=%s levelLimit=%d"
+				+ " anvil input: slot0=%s slot1=%s mergeConflicts=%s mergeIncompatible=%s levelLimit=%d costLimitEnabled=%s costLimit=%d"
 						.formatted(describe(handler.getSlot(0).getStack()),
 								describe(handler.getSlot(1).getStack()),
 								Configuration.instance.anvil.mergeConflicts,
 								Configuration.instance.anvil.mergeIncompatible,
-								Configuration.instance.anvil.levelLimit);
+								Configuration.instance.anvil.levelLimit,
+								Configuration.instance.anvil.costLimitEnabled,
+								Configuration.instance.anvil.costLimit);
 
 		if (!message.equals(this.limitlessLastInput)) {
 			this.limitlessLastInput = message;

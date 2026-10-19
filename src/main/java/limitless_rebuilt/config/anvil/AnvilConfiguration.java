@@ -9,10 +9,21 @@ public final class AnvilConfiguration {
 	public boolean mergeConflicts = true;
 	/** Apply the enchantment even if the item is not normally an acceptable target. */
 	public boolean mergeIncompatible;
-	/** Repair and enchantment costs never increase. */
-	public boolean fixedCost = true;
+	/** Whether the calculated cost is capped by {@link #costLimit}. */
+	public boolean costLimitEnabled = true;
+	/** Vanilla shows "too expensive" when the cost exceeds this many levels. */
 	public int levelLimit = Integer.MAX_VALUE;
+	/** When {@link #costLimitEnabled} is on, a calculated cost above this value is replaced with it. */
+	public int costLimit = 40;
 	public AnvilNormalizationEntry normalization = new AnvilNormalizationEntry();
+
+	/**
+	 * The "too expensive" threshold actually used. The level limit is ignored while the cost cap is on,
+	 * which is why the {@code level limit} field is greyed out in that case.
+	 */
+	public int effectiveLevelLimit() {
+		return costLimitEnabled ? Integer.MAX_VALUE : levelLimit;
+	}
 
 	public void postLoad() {
 		if (this.normalization == null) {
@@ -21,6 +32,10 @@ public final class AnvilConfiguration {
 
 		if (this.normalization.display == null) {
 			this.normalization.display = CostDisplay.REPLACE;
+		}
+
+		if (this.costLimit < 0) {
+			this.costLimit = 0;
 		}
 	}
 }

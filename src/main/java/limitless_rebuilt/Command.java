@@ -146,6 +146,8 @@ public enum Command implements CommandRegistrationCallback {
 				});
 
 		source.sendFeedback(() -> Text.literal("anvil levelLimit=" + Configuration.instance.anvil.levelLimit
+					+ ", costLimitEnabled=" + Configuration.instance.anvil.costLimitEnabled
+					+ ", costLimit=" + Configuration.instance.anvil.costLimit
 				+ ", enchantingPower block default=" + net.minecraft.text.Text.literal("see config")
 				+ ", maxPower=" + Configuration.instance.enchantment.enchantingBlocks.maxPower
 				+ ", maxBlocks=" + Configuration.instance.enchantment.enchantingBlocks.maxBlocks), false);

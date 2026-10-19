@@ -19,6 +19,9 @@ import me.shedaniel.clothconfig2.api.AbstractConfigListEntry;
 import me.shedaniel.clothconfig2.api.ConfigBuilder;
 import me.shedaniel.clothconfig2.api.ConfigCategory;
 import me.shedaniel.clothconfig2.api.ConfigEntryBuilder;
+import me.shedaniel.clothconfig2.api.Requirement;
+import me.shedaniel.clothconfig2.gui.entries.BooleanListEntry;
+import me.shedaniel.clothconfig2.gui.entries.IntegerListEntry;
 import me.shedaniel.clothconfig2.impl.builders.BooleanToggleBuilder;
 import me.shedaniel.clothconfig2.impl.builders.SubCategoryBuilder;
 import net.fabricmc.api.EnvType;
@@ -259,12 +262,18 @@ public final class LimitlessConfigScreen {
 		category.addEntry(toggle(entries, "anvil.mergeIncompatible", configuration.mergeIncompatible,
 				value -> configuration.mergeIncompatible = value,
 				"anvil.mergeIncompatible.@Tooltip"));
-		category.addEntry(toggle(entries, "anvil.fixedCost", configuration.fixedCost,
-				value -> configuration.fixedCost = value,
-				"anvil.fixedCost.@Tooltip"));
-		category.addEntry(field(entries, "anvil.levelLimit", configuration.levelLimit, 0, Integer.MAX_VALUE,
+		BooleanListEntry maxCost = toggle(entries, "anvil.costLimitEnabled", configuration.costLimitEnabled,
+				value -> configuration.costLimitEnabled = value,
+				"anvil.costLimitEnabled.@Tooltip");
+		category.addEntry(maxCost);
+		IntegerListEntry levelLimit = field(entries, "anvil.levelLimit", configuration.levelLimit, 0, Integer.MAX_VALUE,
 				value -> configuration.levelLimit = value,
-				"anvil.levelLimit.@Tooltip"));
+				"anvil.levelLimit.@Tooltip");
+		levelLimit.setRequirement(Requirement.isFalse(maxCost));
+		category.addEntry(levelLimit);
+		category.addEntry(field(entries, "anvil.costLimit", configuration.costLimit, 0, Integer.MAX_VALUE,
+				value -> configuration.costLimit = value,
+				"anvil.costLimit.@Tooltip"));
 
 		SubCategoryBuilder normalization = section(entries, "anvil.normalization");
 		normalization.add(toggle(entries, "anvil.normalization.enabled", configuration.normalization.enabled,

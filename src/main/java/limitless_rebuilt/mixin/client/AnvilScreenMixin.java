@@ -44,7 +44,7 @@ public abstract class AnvilScreenMixin extends ForgingScreen<AnvilScreenHandler>
 
 	@ModifyConstant(method = "drawForeground", constant = @Constant(intValue = 40))
 	private int modifyLevelLimit(int original) {
-		return Configuration.instance.anvil.levelLimit;
+		return Configuration.instance.anvil.effectiveLevelLimit();
 	}
 
 	@Redirect(

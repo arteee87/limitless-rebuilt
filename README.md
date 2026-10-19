@@ -13,8 +13,8 @@ Mod features:
      allows enchantments in enchantment tables to be revealed (disabled by default);
      makes the enchanting power of all blocks configurable (only through the JSON configuration);
      treats other mods' bookshelves as enchanting blocks in addition to the default bookshelf;
-     disables survival mode anvil level limit;
-     makes anvil repair cost constant instead of exponential (configurable; enabled by default);
+     disables survival mode anvil level limit (or caps the cost at a configurable value, enabled by default);
+     makes anvil repair cost constant instead of exponential (always on);
      disables bookshelf limit and increases range to 64 meters horizontally and vertically (configurable);
      allows treasure enchantments to be acquired at enchanting tables (configurable; enabled by default); and
      shows the enchantment effects in the tooltip (configurable, enabled by default).
