@@ -171,19 +171,21 @@ public abstract class ItemStackMixin {
 	 * one, this handler stops matching and {@code check-mixins.py} says so; it will not fail quietly.
 	 */
 	@Inject(
-			method = "method_57370",
-			at = @At(value = "INVOKE", target = "Lnet/minecraft/world/item/component/ItemAttributeModifiers$Display;apply(Ljava/util/function/Consumer;Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/core/Holder;Lnet/minecraft/world/entity/ai/attributes/AttributeModifier;)V")
+			method = "lambda$addAttributeTooltips$0",
+			at = @At("HEAD")
 	)
 	private static void noteAttributeGroup(
 			MutableBoolean heading,
 			Consumer<Component> lines,
-			EquipmentSlotGroup slot,
+			EquipmentSlotGroup group,
 			Player player,
 			Holder<Attribute> attribute,
 			AttributeModifier modifier,
 			ItemAttributeModifiers.Display display,
 			CallbackInfo info) {
-		AttributeTooltipContext.noteGroup(slot);
+		if (display != ItemAttributeModifiers.Display.hidden() && heading.isTrue()) {
+			AttributeTooltipContext.noteGroup(group);
+		}
 	}
 
 	/**

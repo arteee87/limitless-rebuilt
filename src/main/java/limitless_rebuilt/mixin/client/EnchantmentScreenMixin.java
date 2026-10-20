@@ -8,7 +8,7 @@ import limitless_rebuilt.config.enchantment.entry.normalization.EnchantmentNorma
 import limitless_rebuilt.enchantment.ExperienceUtil;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.EnchantmentScreen;
 import net.minecraft.core.Registry;
@@ -61,7 +61,7 @@ public abstract class EnchantmentScreenMixin extends AbstractContainerScreen<Enc
 	 * at a limit of zero.
 	 */
 	@Redirect(
-			method = "render",
+			method = "extractRenderState",
 			at = @At(value = "FIELD", target = "Lnet/minecraft/world/inventory/EnchantmentMenu;costs:[I", ordinal = 0)
 	)
 	private int[] limitless_renderRequirement(EnchantmentMenu handler) {
@@ -69,7 +69,7 @@ public abstract class EnchantmentScreenMixin extends AbstractContainerScreen<Enc
 	}
 
 	@Redirect(
-			method = "render",
+			method = "extractRenderState",
 			at = @At(value = "FIELD", target = "Lnet/minecraft/world/inventory/EnchantmentMenu;costs:[I", ordinal = 1)
 	)
 	private int[] limitless_renderRequirementText(EnchantmentMenu handler) {
@@ -77,7 +77,7 @@ public abstract class EnchantmentScreenMixin extends AbstractContainerScreen<Enc
 	}
 
 	@Redirect(
-			method = "renderBg",
+			method = "extractBackground",
 			at = @At(value = "FIELD", target = "Lnet/minecraft/world/inventory/EnchantmentMenu;costs:[I")
 	)
 	private int[] limitless_backgroundRequirement(EnchantmentMenu handler) {
@@ -99,8 +99,8 @@ public abstract class EnchantmentScreenMixin extends AbstractContainerScreen<Enc
 	 * the case worth reading — so the three lines are built first and compared, the same way the anvil
 	 * screen compares its own.
 	 */
-	@Inject(method = "render", at = @At("HEAD"))
-	private void logRequirement(GuiGraphics context, int mouseX, int mouseY, float delta, CallbackInfo info) {
+	@Inject(method = "extractRenderState", at = @At("HEAD"))
+	private void logRequirement(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta, CallbackInfo info) {
 		if (!Configuration.instance.debug || minecraft.player == null) {
 			return;
 		}
@@ -131,7 +131,7 @@ public abstract class EnchantmentScreenMixin extends AbstractContainerScreen<Enc
 	}
 
 	@Redirect(
-			method = "render",
+			method = "extractRenderState",
 			at = @At(value = "INVOKE", target = "Ljava/util/List;add(Ljava/lang/Object;)Z", ordinal = 0)
 	)
 	private boolean revealEnchantments(List<Object> lines, Object clue) {
@@ -171,8 +171,8 @@ public abstract class EnchantmentScreenMixin extends AbstractContainerScreen<Enc
 		return true;
 	}
 
-	@Inject(method = "render", at = @At("TAIL"))
-	private void showNormalizedCost(GuiGraphics context, int mouseX, int mouseY, float delta, CallbackInfo info) {
+	@Inject(method = "extractRenderState", at = @At("TAIL"))
+	private void showNormalizedCost(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta, CallbackInfo info) {
 		EnchantmentNormalizationEntry normalization = Configuration.instance.enchantment.normalization;
 
 		if (!normalization.enabled || minecraft.player == null || minecraft.player.getAbilities().instabuild) {
@@ -198,11 +198,11 @@ public abstract class EnchantmentScreenMixin extends AbstractContainerScreen<Enc
 			int color = affordable ? COLOR_ENABLED : COLOR_DISABLED;
 			int outline = affordable ? OUTLINE_ENABLED : OUTLINE_DISABLED;
 
-			context.drawString(minecraft.font, text, x - 1, y, outline, false);
-			context.drawString(minecraft.font, text, x + 1, y, outline, false);
-			context.drawString(minecraft.font, text, x, y - 1, outline, false);
-			context.drawString(minecraft.font, text, x, y + 1, outline, false);
-			context.drawString(minecraft.font, text, x, y, color, false);
+			context.text(minecraft.font, text, x - 1, y, outline, false);
+			context.text(minecraft.font, text, x + 1, y, outline, false);
+			context.text(minecraft.font, text, x, y - 1, outline, false);
+			context.text(minecraft.font, text, x, y + 1, outline, false);
+			context.text(minecraft.font, text, x, y, color, false);
 		}
 	}
 }

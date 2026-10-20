@@ -59,7 +59,7 @@ public enum Command implements CommandRegistrationCallback {
 							Configuration.reload();
 
 							if (context.getSource().getEntity() instanceof Player player) {
-								player.displayClientMessage(Component.literal("Done."), true);
+								player.sendSystemMessage(Component.literal("Done."));
 							}
 
 							return com.mojang.brigadier.Command.SINGLE_SUCCESS;
@@ -109,7 +109,7 @@ public enum Command implements CommandRegistrationCallback {
 										Enchantment.getFullname(registry.wrapAsHolder(entry.getValue()), 4000).getString())), false));
 
 		for (ItemStack stack : List.of(new ItemStack(Items.DIAMOND_SWORD), new ItemStack(Items.BOOK))) {
-			source.sendSuccess(() -> Component.literal("--- " + stack.getItem().getName().getString()
+			source.sendSuccess(() -> Component.literal("--- " + stack.getItem().getName(stack).getString()
 					+ ", enchantable=" + stack.has(net.minecraft.core.component.DataComponents.ENCHANTABLE)
 					+ ", isEnchantable=" + stack.isEnchantable()
 					+ ", modAccepts=" + EnchantmentUtil.isEnchantable(stack)), false);

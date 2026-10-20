@@ -51,15 +51,15 @@ public abstract class EnchantmentHelperMixin {
 
 	@Redirect(
 			method = "getAvailableEnchantmentResults",
-			at = @At(value = "INVOKE", target = "Lnet/minecraft/world/item/ItemStack;is(Lnet/minecraft/world/item/Item;)Z")
+			at = @At(value = "INVOKE", target = "Lnet/minecraft/world/item/ItemStack;is(Ljava/lang/Object;)Z")
 	)
-	private static boolean treatEnchantedBookAsBook(ItemStack stack, Item item) {
-		if (item == Items.BOOK && stack.is(Items.ENCHANTED_BOOK)
+	private static boolean treatEnchantedBookAsBook(ItemStack stack, Object item) {
+		if (item == Items.BOOK && stack.is(holder -> holder.value() == Items.ENCHANTED_BOOK)
 				&& Configuration.instance.enchantment.reenchanting.allowEnchantedBooks()) {
 			return true;
 		}
 
-		return stack.is(item);
+		return stack.is(holder -> holder.value() == item);
 	}
 
 	/**

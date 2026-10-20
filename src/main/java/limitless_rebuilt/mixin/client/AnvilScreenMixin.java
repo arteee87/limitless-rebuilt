@@ -42,13 +42,13 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> {
 	@Unique
 	private String limitlessLastDisplay;
 
-	@ModifyConstant(method = "renderLabels", constant = @Constant(intValue = 40))
+	@ModifyConstant(method = "extractLabels", constant = @Constant(intValue = 40))
 	private int modifyLevelLimit(int original) {
 		return Configuration.instance.anvil.effectiveLevelLimit();
 	}
 
 	@Redirect(
-			method = "renderLabels",
+			method = "extractLabels",
 			at = @At(
 					value = "INVOKE",
 					target = "Lnet/minecraft/network/chat/Component;translatable(Ljava/lang/String;[Ljava/lang/Object;)Lnet/minecraft/network/chat/MutableComponent;"

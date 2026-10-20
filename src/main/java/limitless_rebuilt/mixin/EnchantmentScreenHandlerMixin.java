@@ -46,8 +46,8 @@ public abstract class EnchantmentScreenHandlerMixin {
 	 * into. Yarn gives those two methods no name, which means the name below is identical in the
 	 * named and in the intermediary namespace and needs no remapping.
 	 */
-	private static final String CONTENT_CHANGED_BODY = "method_17411";
-	private static final String BUTTON_CLICK_BODY = "method_17410";
+	private static final String CONTENT_CHANGED_BODY = "lambda$slotsChanged$0";
+	private static final String BUTTON_CLICK_BODY = "lambda$clickMenuButton$0";
 
 	@Shadow
 	public int[] costs;
