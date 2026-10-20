@@ -11,27 +11,27 @@ import java.util.Map;
 import java.util.Optional;
 import limitless_rebuilt.config.Configuration;
 import limitless_rebuilt.config.enchantment.entry.EnchantmentTooltipConfiguration;
-import net.minecraft.component.ComponentType;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.EnchantmentEffectComponentTypes;
-import net.minecraft.component.type.AttributeModifierSlot;
-import net.minecraft.component.type.ItemEnchantmentsComponent;
-import net.minecraft.enchantment.Enchantment;
-import net.minecraft.enchantment.EnchantmentLevelBasedValue;
-import net.minecraft.enchantment.effect.EnchantmentEffectEntry;
-import net.minecraft.enchantment.effect.EnchantmentEntityEffect;
-import net.minecraft.enchantment.effect.EnchantmentValueEffect;
-import net.minecraft.enchantment.effect.TargetedEnchantmentEffect;
-import net.minecraft.enchantment.effect.entity.ExplodeEnchantmentEffect;
-import net.minecraft.enchantment.effect.value.AddEnchantmentEffect;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.DynamicRegistryManager;
-import net.minecraft.registry.Registry;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.registry.entry.RegistryEntry;
-import net.minecraft.registry.entry.RegistryEntryList;
-import net.minecraft.registry.tag.EnchantmentTags;
+import net.minecraft.core.Holder;
+import net.minecraft.core.HolderSet;
+import net.minecraft.core.Registry;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.component.DataComponentType;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.tags.EnchantmentTags;
+import net.minecraft.world.entity.EquipmentSlotGroup;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.enchantment.ConditionalEffect;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.EnchantmentEffectComponents;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
+import net.minecraft.world.item.enchantment.LevelBasedValue;
+import net.minecraft.world.item.enchantment.TargetedConditionalEffect;
+import net.minecraft.world.item.enchantment.effects.AddValue;
+import net.minecraft.world.item.enchantment.effects.EnchantmentEntityEffect;
+import net.minecraft.world.item.enchantment.effects.EnchantmentValueEffect;
+import net.minecraft.world.item.enchantment.effects.ExplodeEffect;
 import java.util.stream.Stream;
 
 /**
@@ -70,14 +70,14 @@ public final class EnchantmentStats {
 	 * when a datapack moves an enchantment to another slot. {@code null} means the line has no heading
 	 * of its own, which is what vanilla does for the slots it gives no {@code item.modifiers} key.
 	 */
-	public record Stat(Channel channel, String key, float value, Style style, AttributeModifierSlot group) {
+	public record Stat(Channel channel, String key, float value, Style style, EquipmentSlotGroup group) {
 		public Stat(Channel channel, String key, float value, Style style) {
 			this(channel, key, value, style, null);
 		}
 	}
 
 	/** What makes two lines the same line: everything but the number. */
-	private record Line(Channel channel, String key, Style style, int order, AttributeModifierSlot group) {
+	private record Line(Channel channel, String key, Style style, int order, EquipmentSlotGroup group) {
 	}
 
 	private record Category(Value value, String key, Style style) {
@@ -91,7 +91,7 @@ public final class EnchantmentStats {
 	 * of its numbers inside the explosion it causes — one level deeper than any other enchantment
 	 * goes — so neither has a component type of its own.
 	 *
-	 * <p>Nothing here names a component type directly. {@link EnchantmentEffectComponentTypes} is a
+	 * <p>Nothing here names a component type directly. {@link EnchantmentEffectComponents} is a
 	 * registry holder, so touching it from a static initialiser would drag the game's bootstrap into
 	 * class loading and make this table untestable in isolation. Both mappings are resolved by
 	 * {@link #channelOf} and {@link #valueEffect} instead, when the tooltip is actually drawn.
@@ -116,7 +116,7 @@ public final class EnchantmentStats {
 	 * quantities of the same thing.
 	 *
 	 * <p><b>This declaration order is the fallback, not the answer.</b> The real order comes from
-	 * {@code #minecraft:tooltip_order}, read once by {@link #reload(DynamicRegistryManager)}: vanilla
+	 * {@code #minecraft:tooltip_order}, read once by {@link #reload(RegistryAccess)}: vanilla
 	 * already answers this exact question for its own enchantment lines, and following its answer
 	 * keeps the two blocks consistent rather than inventing a second convention. The order written
 	 * down here only decides what happens before that has run — a {@code /limitless} command on a
@@ -153,7 +153,7 @@ public final class EnchantmentStats {
 	/**
 	 * Where each mapped enchantment sits in {@code #minecraft:tooltip_order}.
 	 *
-	 * <p>Empty until {@link #reload(DynamicRegistryManager)} has run, and published as one
+	 * <p>Empty until {@link #reload(RegistryAccess)} has run, and published as one
 	 * {@code volatile} assignment so a reader sees either the old table or the new one and never a
 	 * half-built one. {@code volatile} plus an immutable value is the same bargain
 	 * {@code EnchantmentLevels} makes with its registry.
@@ -170,27 +170,27 @@ public final class EnchantmentStats {
 	 * is entitled to do. The tail goes in through {@code putIfAbsent}, or a tagged enchantment would
 	 * be given a second position and push everything after it along.
 	 */
-	public static void reload(DynamicRegistryManager manager) {
+	public static void reload(RegistryAccess manager) {
 		if (manager == null) {
 			return;
 		}
 
-		Registry<Enchantment> registry = manager.getOrThrow(RegistryKeys.ENCHANTMENT);
-		List<RegistryEntry<Enchantment>> tagged = registry.getOptional(EnchantmentTags.TOOLTIP_ORDER)
-				.map(RegistryEntryList::stream)
+		Registry<Enchantment> registry = manager.lookupOrThrow(Registries.ENCHANTMENT);
+		List<Holder<Enchantment>> tagged = registry.get(EnchantmentTags.TOOLTIP_ORDER)
+				.map(HolderSet::stream)
 				.map(Stream::toList)
 				.orElseGet(List::of);
 		Map<String, Integer> positions = new LinkedHashMap<>();
 		int position = 0;
 
-		for (RegistryEntry<Enchantment> entry : tagged) {
+		for (Holder<Enchantment> entry : tagged) {
 			positions.put(identifier(entry), position++);
 		}
 
-		for (RegistryKey<Enchantment> key : registry.getEntrySet().stream()
+		for (ResourceKey<Enchantment> key : registry.entrySet().stream()
 				.map(Map.Entry::getKey)
 				.toList()) {
-			positions.putIfAbsent(key.getValue().toString(), position++);
+			positions.putIfAbsent(key.identifier().toString(), position++);
 		}
 
 		order = Collections.unmodifiableMap(positions);
@@ -233,9 +233,9 @@ public final class EnchantmentStats {
 	public static double sharpnessBonus(ItemStack stack) {
 		double total = 0.0;
 
-		for (Object2IntMap.Entry<RegistryEntry<Enchantment>> entry : enchantments(stack)) {
+		for (Object2IntMap.Entry<Holder<Enchantment>> entry : enchantments(stack)) {
 			if (identifier(entry.getKey()).equals(SHARPNESS)) {
-				total += sum(entry.getKey().value(), EnchantmentEffectComponentTypes.DAMAGE, entry.getIntValue());
+				total += sum(entry.getKey().value(), EnchantmentEffectComponents.DAMAGE, entry.getIntValue());
 			}
 		}
 
@@ -268,7 +268,7 @@ public final class EnchantmentStats {
 
 		Map<Line, Float> merged = new LinkedHashMap<>();
 
-		for (Object2IntMap.Entry<RegistryEntry<Enchantment>> entry : enchantments(stack)) {
+		for (Object2IntMap.Entry<Holder<Enchantment>> entry : enchantments(stack)) {
 			String id = identifier(entry.getKey());
 
 			if (id.equals(SHARPNESS)) {
@@ -283,7 +283,7 @@ public final class EnchantmentStats {
 
 			Enchantment enchantment = entry.getKey().value();
 			int level = entry.getIntValue();
-			AttributeModifierSlot group = groupOf(enchantment);
+			EquipmentSlotGroup group = groupOf(enchantment);
 			int position = orderOf(id);
 
 			for (Category category : categories) {
@@ -318,28 +318,28 @@ public final class EnchantmentStats {
 	 * vanilla would have used. A line that came from two enchantments at once keeps the group of the
 	 * first; every pair that merges today sits in one slot anyway.
 	 */
-	private static AttributeModifierSlot groupOf(Enchantment enchantment) {
-		List<AttributeModifierSlot> slots = enchantment.definition().slots();
+	private static EquipmentSlotGroup groupOf(Enchantment enchantment) {
+		List<EquipmentSlotGroup> slots = enchantment.definition().slots();
 
 		return slots.isEmpty() ? null : slots.get(0);
 	}
 
 	/** Where a group sits in the order vanilla walks its slots. */
-	private static int groupRank(AttributeModifierSlot group) {
+	private static int groupRank(EquipmentSlotGroup group) {
 		return group == null ? Integer.MAX_VALUE : group.ordinal();
 	}
 
 	/** Adds one line, or leaves the map alone when the enchantment says nothing at this level. */
 	private static void merge(Map<Line, Float> merged, Enchantment enchantment, int level,
-			AttributeModifierSlot group, int position, Category category) {
+			EquipmentSlotGroup group, int position, Category category) {
 		Line line = new Line(channelOf(category.value()), category.key(), category.style(), position, group);
 
 		switch (category.value()) {
 			case WIND_BURST_KNOCKBACK -> windBurst(enchantment)
-					.flatMap(ExplodeEnchantmentEffect::knockbackMultiplier)
-					.ifPresent(value -> add(merged, line, value.getValue(level)));
+					.flatMap(ExplodeEffect::knockbackMultiplier)
+					.ifPresent(value -> add(merged, line, value.calculate(level)));
 			case WIND_BURST_RADIUS -> windBurst(enchantment)
-					.ifPresent(explode -> add(merged, line, explode.radius().getValue(level)));
+					.ifPresent(explode -> add(merged, line, explode.radius().calculate(level)));
 			default -> add(merged, line, sum(enchantment, valueEffect(category.value()), level));
 		}
 	}
@@ -358,13 +358,13 @@ public final class EnchantmentStats {
 	}
 
 	/** The channel a source adds its values to. The wind burst pair reads no channel at all. */
-	private static ComponentType<List<EnchantmentEffectEntry<EnchantmentValueEffect>>> valueEffect(Value value) {
+	private static DataComponentType<List<ConditionalEffect<EnchantmentValueEffect>>> valueEffect(Value value) {
 		return switch (value) {
-			case DAMAGE -> EnchantmentEffectComponentTypes.DAMAGE;
-			case KNOCKBACK -> EnchantmentEffectComponentTypes.KNOCKBACK;
-			case PROTECTION -> EnchantmentEffectComponentTypes.DAMAGE_PROTECTION;
+			case DAMAGE -> EnchantmentEffectComponents.DAMAGE;
+			case KNOCKBACK -> EnchantmentEffectComponents.KNOCKBACK;
+			case PROTECTION -> EnchantmentEffectComponents.DAMAGE_PROTECTION;
 			// Density: a coefficient added per block fallen, never a flat bonus.
-			case SMASH_DAMAGE -> EnchantmentEffectComponentTypes.SMASH_DAMAGE_PER_FALLEN_BLOCK;
+			case SMASH_DAMAGE -> EnchantmentEffectComponents.SMASH_DAMAGE_PER_FALLEN_BLOCK;
 			case WIND_BURST_KNOCKBACK, WIND_BURST_RADIUS ->
 					throw new IllegalStateException(value + " reads no value-effect channel");
 		};
@@ -378,10 +378,10 @@ public final class EnchantmentStats {
 	 * the day it is not, with nothing raised to say so. Only the first explosion is returned: an
 	 * enchantment causing two would have no single radius to report.
 	 */
-	private static Optional<ExplodeEnchantmentEffect> windBurst(Enchantment enchantment) {
-		for (TargetedEnchantmentEffect<EnchantmentEntityEffect> effect
-				: enchantment.getEffect(EnchantmentEffectComponentTypes.POST_ATTACK)) {
-			if (effect.effect() instanceof ExplodeEnchantmentEffect explode) {
+	private static Optional<ExplodeEffect> windBurst(Enchantment enchantment) {
+		for (TargetedConditionalEffect<EnchantmentEntityEffect> effect
+				: enchantment.getEffects(EnchantmentEffectComponents.POST_ATTACK)) {
+			if (effect.effect() instanceof ExplodeEffect explode) {
 				return Optional.of(explode);
 			}
 		}
@@ -396,28 +396,28 @@ public final class EnchantmentStats {
 	}
 
 	private static float sum(Enchantment enchantment,
-			ComponentType<List<EnchantmentEffectEntry<EnchantmentValueEffect>>> channel,
+			DataComponentType<List<ConditionalEffect<EnchantmentValueEffect>>> channel,
 			int level) {
 		float total = 0.0F;
 
-		for (EnchantmentEffectEntry<EnchantmentValueEffect> entry : enchantment.getEffect(channel)) {
-			if (entry.effect() instanceof AddEnchantmentEffect add) {
-				EnchantmentLevelBasedValue value = add.value();
-				total += value.getValue(level);
+		for (ConditionalEffect<EnchantmentValueEffect> entry : enchantment.getEffects(channel)) {
+			if (entry.effect() instanceof AddValue add) {
+				LevelBasedValue value = add.value();
+				total += value.calculate(level);
 			}
 		}
 
 		return total;
 	}
 
-	private static List<Object2IntMap.Entry<RegistryEntry<Enchantment>>> enchantments(ItemStack stack) {
-		ItemEnchantmentsComponent component = stack.get(DataComponentTypes.ENCHANTMENTS);
+	private static List<Object2IntMap.Entry<Holder<Enchantment>>> enchantments(ItemStack stack) {
+		ItemEnchantments component = stack.get(DataComponents.ENCHANTMENTS);
 
 		if (component == null || component.isEmpty()) {
 			return List.of();
 		}
 
-		return List.copyOf(component.getEnchantmentEntries());
+		return List.copyOf(component.entrySet());
 	}
 
 	private static boolean isEnabled(EnchantmentTooltipConfiguration configuration, Channel channel) {
@@ -428,9 +428,9 @@ public final class EnchantmentStats {
 		};
 	}
 
-	private static String identifier(RegistryEntry<Enchantment> entry) {
-		return entry.getKey()
-				.map(key -> key.getValue().toString())
+	private static String identifier(Holder<Enchantment> entry) {
+		return entry.unwrapKey()
+				.map(key -> key.identifier().toString())
 				.orElse("");
 	}
 

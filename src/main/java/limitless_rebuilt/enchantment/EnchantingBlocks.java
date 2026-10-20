@@ -10,14 +10,14 @@ import limitless_rebuilt.config.Configuration;
 import limitless_rebuilt.config.enchantment.EnchantingBlockConfiguration;
 import limitless_rebuilt.config.enchantment.entry.radius.HorizontalRadius;
 import limitless_rebuilt.config.enchantment.entry.radius.VerticalRadius;
-import net.minecraft.block.Block;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.random.Random;
-import net.minecraft.world.World;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.util.RandomSource;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
 
 /**
  * Bookshelf scanning and the experience level an enchanting table asks for.
@@ -63,12 +63,12 @@ public final class EnchantingBlocks {
 
 	private static java.util.Optional<Block> resolve(String key) {
 		Identifier identifier = Identifier.tryParse(key);
-		RegistryKey<Block> registryKey = identifier == null
+		ResourceKey<Block> registryKey = identifier == null
 				? null
-				: RegistryKey.of(net.minecraft.registry.RegistryKeys.BLOCK, identifier);
+				: ResourceKey.create(net.minecraft.core.registries.Registries.BLOCK, identifier);
 		java.util.Optional<Block> block = registryKey == null
 				? java.util.Optional.empty()
-				: Registries.BLOCK.getOptionalValue(registryKey);
+				: BuiltInRegistries.BLOCK.getOptional(registryKey);
 
 		block.ifPresentOrElse(
 				ignored -> {
@@ -95,8 +95,8 @@ public final class EnchantingBlocks {
 	}
 
 	private static boolean isEnchanting(Block block) {
-		return block.getRegistryEntry().isIn(EnchantingBlockConfiguration.ENCHANTING_BLOCKS)
-				|| block.getRegistryEntry().isIn(EnchantingBlockConfiguration.BOOKSHELVES);
+		return block.builtInRegistryHolder().is(EnchantingBlockConfiguration.ENCHANTING_BLOCKS)
+				|| block.builtInRegistryHolder().is(EnchantingBlockConfiguration.BOOKSHELVES);
 	}
 
 	/**
@@ -107,7 +107,7 @@ public final class EnchantingBlocks {
  * direction already visits them — counted twice, a corner bookshelf would add {@link
  * EnchantingBlockConfiguration#DEFAULT_POWER} for nothing.
  */
-public static void forEachInRange(World world, BlockPos center, BiConsumer<Block, BlockPos> visitor) {
+public static void forEachInRange(Level world, BlockPos center, BiConsumer<Block, BlockPos> visitor) {
 	HorizontalRadius horizontal = Configuration.instance.enchantment.enchantingBlocks.radius.xz;
 	VerticalRadius vertical = Configuration.instance.enchantment.enchantingBlocks.radius.y;
 
@@ -118,11 +118,11 @@ public static void forEachInRange(World world, BlockPos center, BiConsumer<Block
 
 				for (int distance = -radius; distance <= radius; distance++) {
 					int displacement = direction * distance;
-					BlockPos first = center.add(displacement, y, end);
+					BlockPos first = center.offset(displacement, y, end);
 					visitor.accept(world.getBlockState(first).getBlock(), first);
 
 					if (distance != radius && distance != -radius) {
-						BlockPos second = center.add(end, y, displacement);
+						BlockPos second = center.offset(end, y, displacement);
 						visitor.accept(world.getBlockState(second).getBlock(), second);
 					}
 				}
@@ -132,7 +132,7 @@ public static void forEachInRange(World world, BlockPos center, BiConsumer<Block
 }
 
 /** Total power of every contributing block around the table. */
-public static float countEnchantingPower(World world, BlockPos center) {
+public static float countEnchantingPower(Level world, BlockPos center) {
 		float[] power = {0.0F};
 
 		forEachInRange(world, center, (block, offset) -> power[0] += enchantingPower(block));
@@ -140,8 +140,8 @@ public static float countEnchantingPower(World world, BlockPos center) {
 		return power[0];
 	}
 
-	private static float power(World world, BlockPos center, int dx, int dy, int dz) {
-		return enchantingPower(world.getBlockState(center.add(dx, dy, dz)).getBlock());
+	private static float power(Level world, BlockPos center, int dx, int dy, int dz) {
+		return enchantingPower(world.getBlockState(center.offset(dx, dy, dz)).getBlock());
 	}
 
 	/**
@@ -166,7 +166,7 @@ public static float countEnchantingPower(World world, BlockPos center) {
 	 * Experience level the table asks for, matching the 1.19.3 mod rather than the 1.21.4 vanilla
 	 * one: the accumulated power is used directly instead of being a bookshelf count.
 	 */
-	public static int calculateRequiredExperienceLevel(Random random, int slotIndex, float enchantingPower, ItemStack stack) {
+	public static int calculateRequiredExperienceLevel(RandomSource random, int slotIndex, float enchantingPower, ItemStack stack) {
 		// this used to test for the enchantable component and nothing else, which made the reenchanting
 		// of enchanted books impossible even though ItemStack.isEnchantable() had been made to agree:
 		// the table's own gate was open while this formula still answered zero, and the table skips a

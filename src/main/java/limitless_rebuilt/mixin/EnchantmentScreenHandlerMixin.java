@@ -8,20 +8,19 @@ import limitless_rebuilt.enchantment.EnchantingBlocks;
 import limitless_rebuilt.enchantment.EnchantmentLimits;
 import limitless_rebuilt.enchantment.EnchantmentUtil;
 import limitless_rebuilt.enchantment.ExperienceUtil;
-import net.minecraft.block.EnchantingTableBlock;
-import net.minecraft.enchantment.Enchantment;
-import net.minecraft.enchantment.EnchantmentLevelEntry;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.DynamicRegistryManager;
-import net.minecraft.registry.Registry;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.entry.RegistryEntry;
-import net.minecraft.registry.entry.RegistryEntryList;
-import net.minecraft.registry.tag.EnchantmentTags;
-import net.minecraft.screen.EnchantmentScreenHandler;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.random.Random;
-import net.minecraft.world.World;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
+import net.minecraft.core.HolderSet;
+import net.minecraft.core.Registry;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.tags.EnchantmentTags;
+import net.minecraft.util.RandomSource;
+import net.minecraft.world.inventory.EnchantmentMenu;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.EnchantmentInstance;
+import net.minecraft.world.level.Level;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -39,7 +38,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * formula. Here the same three things are done with injections on the surrounding calls:
  * the bookshelf scan, the level formula, and the candidate list.
  */
-@Mixin(EnchantmentScreenHandler.class)
+@Mixin(EnchantmentMenu.class)
 public abstract class EnchantmentScreenHandlerMixin {
 	/**
 	 * {@code onContentChanged} and {@code onButtonClick} only hand a lambda to the screen handler
@@ -51,7 +50,7 @@ public abstract class EnchantmentScreenHandlerMixin {
 	private static final String BUTTON_CLICK_BODY = "method_17410";
 
 	@Shadow
-	public int[] enchantmentPower;
+	public int[] costs;
 
 	@Unique
 	private float limitlessPower = -1.0F;
@@ -76,13 +75,13 @@ public abstract class EnchantmentScreenHandlerMixin {
 	@Unique
 	private String[] limitlessLastGenerated = new String[3];
 
-	@Inject(method = "onContentChanged", at = @At("HEAD"))
+	@Inject(method = "slotsChanged", at = @At("HEAD"))
 	private void limitless_resetPower(CallbackInfo info) {
 		this.limitlessPower = -1.0F;
 
 		if (Configuration.instance.debug) {
 			String message = "table opened, item in slot 0 = %s"
-					.formatted(describeTarget(((EnchantmentScreenHandler) (Object) this).getSlot(0).getStack()));
+					.formatted(describeTarget(((EnchantmentMenu) (Object) this).getSlot(0).getItem()));
 
 			if (!message.equals(this.limitlessLastOpened)) {
 				this.limitlessLastOpened = message;
@@ -103,11 +102,10 @@ public abstract class EnchantmentScreenHandlerMixin {
 			method = CONTENT_CHANGED_BODY,
 			at = @At(
 					value = "INVOKE",
-					target = "Lnet/minecraft/block/EnchantingTableBlock;canAccessPowerProvider"
-							+ "(Lnet/minecraft/world/World;Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/util/math/BlockPos;)Z"
+					target = "Lnet/minecraft/world/level/block/EnchantingTableBlock;isValidBookShelf(Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;Lnet/minecraft/core/BlockPos;)Z"
 			)
 	)
-	private boolean limitless_powerProvider(World world, BlockPos table, BlockPos offset) {
+	private boolean limitless_powerProvider(Level world, BlockPos table, BlockPos offset) {
 		if (this.limitlessPower < 0.0F) {
 			this.limitlessPower = EnchantingBlocks.countEnchantingPower(world, table);
 
@@ -148,16 +146,16 @@ public abstract class EnchantmentScreenHandlerMixin {
  * generator, which reads the original from {@link #CONTENT_CHANGED_BODY}.
  */
 	@Redirect(
-			method = "onButtonClick",
+			method = "clickMenuButton",
 			at = @At(
 					value = "FIELD",
-					target = "Lnet/minecraft/screen/EnchantmentScreenHandler;enchantmentPower:[I",
+					target = "Lnet/minecraft/world/inventory/EnchantmentMenu;costs:[I",
 					ordinal = 2
 			)
 	)
-	private int[] limitless_levelRequirement(EnchantmentScreenHandler handler) {
+	private int[] limitless_levelRequirement(EnchantmentMenu handler) {
 		return ExperienceUtil.capRequiredLevels(
-				handler.enchantmentPower,
+				handler.costs,
 				Configuration.instance.enchantment.maxLevelRequirement);
 	}
 
@@ -165,14 +163,14 @@ public abstract class EnchantmentScreenHandlerMixin {
 	 * Reports what a slot demands, which is the only way to tell a capped requirement from one that
 	 * silently still asks for hundreds of levels.
 	 */
-	@Inject(method = "onButtonClick", at = @At("HEAD"))
-	private void limitless_logRequirement(net.minecraft.entity.player.PlayerEntity player, int slot,
+	@Inject(method = "clickMenuButton", at = @At("HEAD"))
+	private void limitless_logRequirement(net.minecraft.world.entity.player.Player player, int slot,
 			CallbackInfoReturnable<Boolean> info) {
-		if (!Configuration.instance.debug || slot < 0 || slot >= this.enchantmentPower.length) {
+		if (!Configuration.instance.debug || slot < 0 || slot >= this.costs.length) {
 			return;
 		}
 
-		int offered = this.enchantmentPower[slot];
+		int offered = this.costs[slot];
 		int required = ExperienceUtil.capRequiredLevel(
 				offered,
 				Configuration.instance.enchantment.maxLevelRequirement);
@@ -188,13 +186,13 @@ public abstract class EnchantmentScreenHandlerMixin {
 	}
 
 	/** Logs what a slot actually offers, which is where an empty list has to be traced back from. */
-	@Inject(method = "generateEnchantments", at = @At("RETURN"))
+	@Inject(method = "getEnchantmentList", at = @At("RETURN"))
 	private void limitless_logGenerated(
-			DynamicRegistryManager registryManager,
+			RegistryAccess registryManager,
 			ItemStack stack,
 			int slot,
 			int level,
-			CallbackInfoReturnable<List<EnchantmentLevelEntry>> info) {
+			CallbackInfoReturnable<List<EnchantmentInstance>> info) {
 		String message = "slot %d: level=%d stack=%s candidates=%d results=%d%s limits=%d"
 				.formatted(
 						slot,
@@ -221,27 +219,25 @@ public abstract class EnchantmentScreenHandlerMixin {
 			method = CONTENT_CHANGED_BODY,
 			at = @At(
 					value = "INVOKE",
-					target = "Lnet/minecraft/enchantment/EnchantmentHelper;calculateRequiredExperienceLevel"
-							+ "(Lnet/minecraft/util/math/random/Random;IILnet/minecraft/item/ItemStack;)I"
+					target = "Lnet/minecraft/world/item/enchantment/EnchantmentHelper;getEnchantmentCost(Lnet/minecraft/util/RandomSource;IILnet/minecraft/world/item/ItemStack;)I"
 			)
 	)
-	private int limitless_requiredLevel(Random random, int slotIndex, int bookshelfCount, ItemStack stack) {
+	private int limitless_requiredLevel(RandomSource random, int slotIndex, int bookshelfCount, ItemStack stack) {
 		float power = this.limitlessPower < 0.0F ? 0.0F : this.limitlessPower;
 		return EnchantingBlocks.calculateRequiredExperienceLevel(random, slotIndex, power, stack);
 	}
 
 	@Redirect(
-			method = "generateEnchantments",
+			method = "getEnchantmentList",
 			at = @At(
 					value = "INVOKE",
-					target = "Lnet/minecraft/registry/DynamicRegistryManager;getOrThrow"
-							+ "(Lnet/minecraft/registry/RegistryKey;)Lnet/minecraft/registry/Registry;"
+					target = "Lnet/minecraft/core/RegistryAccess;lookupOrThrow(Lnet/minecraft/resources/ResourceKey;)Lnet/minecraft/core/Registry;"
 			)
 	)
 	private Registry<Enchantment> limitless_captureRegistry(
-			DynamicRegistryManager manager,
-			RegistryKey<Registry<Enchantment>> key) {
-		Registry<Enchantment> registry = manager.getOrThrow(key);
+			RegistryAccess manager,
+			ResourceKey<Registry<Enchantment>> key) {
+		Registry<Enchantment> registry = manager.lookupOrThrow(key);
 		this.limitlessRegistry = registry;
 		return registry;
 	}
@@ -252,19 +248,19 @@ public abstract class EnchantmentScreenHandlerMixin {
 	 * configuration allows it.
 	 */
 	@Redirect(
-			method = "generateEnchantments",
-			at = @At(value = "INVOKE", target = "Lnet/minecraft/registry/entry/RegistryEntryList$Named;stream()Ljava/util/stream/Stream;")
+			method = "getEnchantmentList",
+			at = @At(value = "INVOKE", target = "Lnet/minecraft/core/HolderSet$Named;stream()Ljava/util/stream/Stream;")
 	)
-	private Stream<RegistryEntry<Enchantment>> limitless_allowTreasure(RegistryEntryList.Named<Enchantment> candidates) {
+	private Stream<Holder<Enchantment>> limitless_allowTreasure(HolderSet.Named<Enchantment> candidates) {
 		Registry<Enchantment> registry = this.limitlessRegistry;
 
 		if (registry == null || !Configuration.instance.enchantment.allowTreasure) {
 			return candidates.stream();
 		}
 
-		Stream<RegistryEntry<Enchantment>> treasure = registry.getEntrySet().stream()
-				.map(candidate -> registry.getEntry(candidate.getValue()))
-				.filter(candidate -> candidate.isIn(EnchantmentTags.TREASURE));
+		Stream<Holder<Enchantment>> treasure = registry.entrySet().stream()
+				.map(candidate -> registry.wrapAsHolder(candidate.getValue()))
+				.filter(candidate -> candidate.is(EnchantmentTags.TREASURE));
 
 		return Stream.concat(candidates.stream(), treasure);
 	}
@@ -277,18 +273,17 @@ public abstract class EnchantmentScreenHandlerMixin {
 			method = BUTTON_CLICK_BODY,
 			at = @At(
 					value = "INVOKE",
-					target = "Lnet/minecraft/item/ItemStack;addEnchantment"
-							+ "(Lnet/minecraft/registry/entry/RegistryEntry;I)V"
+					target = "Lnet/minecraft/world/item/ItemStack;enchant(Lnet/minecraft/core/Holder;I)V"
 			),
 			require = 0
 	)
 	private void limitless_mergeEnchantment(
 			ItemStack stack,
-			RegistryEntry<Enchantment> enchantment,
+			Holder<Enchantment> enchantment,
 			int level) {
 		if (!EnchantmentUtil.mergeEnchantment(
 				stack, enchantment, level, Configuration.instance.enchantment.conflicts.merge)) {
-			stack.addEnchantment(enchantment, level);
+			stack.enchant(enchantment, level);
 		}
 	}
 }

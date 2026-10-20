@@ -6,16 +6,16 @@ import java.util.stream.Stream;
 import limitless_rebuilt.config.Configuration;
 import limitless_rebuilt.config.enchantment.entry.EnchantingConflicts;
 import limitless_rebuilt.enchantment.EnchantmentUtil;
-import net.minecraft.component.ComponentType;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.EnchantableComponent;
-import net.minecraft.enchantment.Enchantment;
-import net.minecraft.enchantment.EnchantmentHelper;
-import net.minecraft.enchantment.EnchantmentLevelEntry;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.registry.entry.RegistryEntry;
+import net.minecraft.core.Holder;
+import net.minecraft.core.component.DataComponentType;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.Enchantable;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
+import net.minecraft.world.item.enchantment.EnchantmentInstance;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
 import org.spongepowered.asm.mixin.injection.At;
@@ -35,12 +35,12 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 @Mixin(EnchantmentHelper.class)
 public abstract class EnchantmentHelperMixin {
 	@Overwrite
-	public static List<EnchantmentLevelEntry> getPossibleEntries(
+	public static List<EnchantmentInstance> getAvailableEnchantmentResults(
 			int level,
 			ItemStack stack,
-			Stream<RegistryEntry<Enchantment>> possibleEnchantments) {
-		List<EnchantmentLevelEntry> entries = new ArrayList<>();
-		boolean book = stack.isOf(Items.BOOK);
+			Stream<Holder<Enchantment>> possibleEnchantments) {
+		List<EnchantmentInstance> entries = new ArrayList<>();
+		boolean book = stack.is(Items.BOOK);
 
 		possibleEnchantments
 				.filter(entry -> entry.value().isPrimaryItem(stack) || book)
@@ -50,29 +50,29 @@ public abstract class EnchantmentHelperMixin {
 	}
 
 	@Redirect(
-			method = "getPossibleEntries",
-			at = @At(value = "INVOKE", target = "Lnet/minecraft/item/ItemStack;isOf(Lnet/minecraft/item/Item;)Z")
+			method = "getAvailableEnchantmentResults",
+			at = @At(value = "INVOKE", target = "Lnet/minecraft/world/item/ItemStack;is(Lnet/minecraft/world/item/Item;)Z")
 	)
 	private static boolean treatEnchantedBookAsBook(ItemStack stack, Item item) {
-		if (item == Items.BOOK && stack.isOf(Items.ENCHANTED_BOOK)
+		if (item == Items.BOOK && stack.is(Items.ENCHANTED_BOOK)
 				&& Configuration.instance.enchantment.reenchanting.allowEnchantedBooks()) {
 			return true;
 		}
 
-		return stack.isOf(item);
+		return stack.is(item);
 	}
 
 	/**
 	 * Makes an enchanted book answer the one question vanilla asks before it offers anything.
 	 *
 	 * <p>{@code generateEnchantments} opens with a direct read of the {@code enchantable} component and
-	 * returns an empty list when it is absent — before {@link #getPossibleEntries} is ever reached. That
+	 * returns an empty list when it is absent — before {@link #getAvailableEnchantmentResults} is ever reached. That
 	 * read is the third one guarding this feature and the reason the previous two fixes looked like
 	 * they had worked and were not: the table offered its three laps at full levels and the buttons did
 	 * nothing, because there was nothing to put in them.
 	 *
 	 * <p>So the {@code enchantable} component has three readers that must agree, and they do not by
-	 * default: {@link net.minecraft.item.ItemStack#isEnchantable()} is answered for the book by
+	 * default: {@link net.minecraft.world.item.ItemStack#isEnchantable()} is answered for the book by
 	 * {@code ItemStackMixin}, {@code EnchantingBlocks#calculateRequiredExperienceLevel} by the shared
 	 * predicate, and this one by the handler below. All three now read
 	 * {@link EnchantmentUtil#isEnchantable}.
@@ -100,18 +100,17 @@ public abstract class EnchantmentHelperMixin {
 	 * {@code EnchantableComponent} so its erased descriptor matches the erased target method.
 	 */
 	@Redirect(
-			method = "generateEnchantments",
+			method = "selectEnchantment",
 			at = @At(
 					value = "INVOKE",
-					target = "Lnet/minecraft/item/ItemStack;get"
-							+ "(Lnet/minecraft/component/ComponentType;)Ljava/lang/Object;"
+					target = "Lnet/minecraft/world/item/ItemStack;get(Lnet/minecraft/core/component/DataComponentType;)Ljava/lang/Object;"
 			)
 	)
-	private static Object treatEnchantedBookAsEnchantable(ItemStack stack, ComponentType<?> type) {
+	private static Object treatEnchantedBookAsEnchantable(ItemStack stack, DataComponentType<?> type) {
 		Object present = stack.get(type);
 
-		if (present == null && type == DataComponentTypes.ENCHANTABLE && EnchantmentUtil.isEnchantable(stack)) {
-			return new EnchantableComponent(1);
+		if (present == null && type == DataComponents.ENCHANTABLE && EnchantmentUtil.isEnchantable(stack)) {
+			return new Enchantable(1);
 		}
 
 		return present;
@@ -135,19 +134,19 @@ public abstract class EnchantmentHelperMixin {
 	 * whole change, and the call it replaces would be the only thing removing them.
 	 */
 	@Redirect(
-			method = "generateEnchantments",
+			method = "selectEnchantment",
 			at = @At(
 					value = "INVOKE",
-					target = "Lnet/minecraft/enchantment/EnchantmentHelper;removeConflicts(Ljava/util/List;Lnet/minecraft/enchantment/EnchantmentLevelEntry;)V"
+					target = "Lnet/minecraft/world/item/enchantment/EnchantmentHelper;filterCompatibleEnchantments(Ljava/util/List;Lnet/minecraft/world/item/enchantment/EnchantmentInstance;)V"
 			)
 	)
-	private static void keepConflicts(List<EnchantmentLevelEntry> possibleEntries, EnchantmentLevelEntry picked) {
+	private static void keepConflicts(List<EnchantmentInstance> possibleEntries, EnchantmentInstance picked) {
 		EnchantingConflicts conflicts = Configuration.instance.enchantment.conflicts;
 
 		if (conflicts.generate) {
 			possibleEntries.removeIf(entry -> !entry.enchantment().equals(picked.enchantment()));
 		} else if (!conflicts.merge) {
-			EnchantmentHelper.removeConflicts(possibleEntries, picked);
+			EnchantmentHelper.filterCompatibleEnchantments(possibleEntries, picked);
 		}
 	}
 }

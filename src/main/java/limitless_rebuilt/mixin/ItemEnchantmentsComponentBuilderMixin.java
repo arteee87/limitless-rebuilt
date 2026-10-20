@@ -1,6 +1,6 @@
 package limitless_rebuilt.mixin;
 
-import net.minecraft.component.type.ItemEnchantmentsComponent;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.Constant;
 import org.spongepowered.asm.mixin.injection.ModifyConstant;
@@ -14,9 +14,9 @@ import org.spongepowered.asm.mixin.injection.ModifyConstant;
  * @author auoeke
  * @reason the mod raises the enchantment level limit beyond 255
  */
-@Mixin(ItemEnchantmentsComponent.Builder.class)
+@Mixin(ItemEnchantments.Mutable.class)
 public abstract class ItemEnchantmentsComponentBuilderMixin {
-	@ModifyConstant(method = {"set", "add"}, constant = @Constant(intValue = 255))
+	@ModifyConstant(method = {"set", "upgrade"}, constant = @Constant(intValue = 255))
 	private int limitless_builderLimit(int original) {
 		return Integer.MAX_VALUE;
 	}

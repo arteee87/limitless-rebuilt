@@ -6,11 +6,11 @@ import java.util.List;
 import java.util.Map;
 import limitless_rebuilt.config.enchantment.entry.radius.HorizontalRadius;
 import limitless_rebuilt.config.enchantment.entry.radius.VerticalRadius;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.tags.TagKey;
 import limitless_rebuilt.LimitlessLogger;
 import limitless_rebuilt.config.enchantment.entry.radius.Radius;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.registry.tag.TagKey;
-import net.minecraft.util.Identifier;
 
 /**
  * Blocks that contribute enchanting power.
@@ -21,10 +21,10 @@ import net.minecraft.util.Identifier;
  */
 public final class EnchantingBlockConfiguration {
 	public static final String NAMESPACE = "c";
-	public static final TagKey<net.minecraft.block.Block> ENCHANTING_BLOCKS =
-			TagKey.of(RegistryKeys.BLOCK, Identifier.of(NAMESPACE, "enchanting_blocks"));
-	public static final TagKey<net.minecraft.block.Block> BOOKSHELVES =
-			TagKey.of(RegistryKeys.BLOCK, Identifier.of(NAMESPACE, "bookshelves"));
+	public static final TagKey<net.minecraft.world.level.block.Block> ENCHANTING_BLOCKS =
+			TagKey.create(Registries.BLOCK, Identifier.fromNamespaceAndPath(NAMESPACE, "enchanting_blocks"));
+	public static final TagKey<net.minecraft.world.level.block.Block> BOOKSHELVES =
+			TagKey.create(Registries.BLOCK, Identifier.fromNamespaceAndPath(NAMESPACE, "bookshelves"));
 
 	public static final float DEFAULT_POWER = 2.0F;
 

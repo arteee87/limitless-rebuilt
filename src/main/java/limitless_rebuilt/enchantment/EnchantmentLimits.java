@@ -2,7 +2,7 @@ package limitless_rebuilt.enchantment;
 
 import java.util.IdentityHashMap;
 import java.util.Map;
-import net.minecraft.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.Enchantment;
 
 /**
  * Per enchantment level limits.

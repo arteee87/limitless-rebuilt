@@ -11,16 +11,6 @@ import limitless_rebuilt.enchantment.EnchantmentStats;
 import limitless_rebuilt.enchantment.EnchantingBlocks;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.api.EnvType;
-import net.minecraft.enchantment.Enchantment;
-import net.minecraft.enchantment.EnchantmentHelper;
-import net.minecraft.enchantment.EnchantmentLevelEntry;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.registry.DynamicRegistryManager;
-import net.minecraft.registry.Registry;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.registry.entry.RegistryEntry;
-import net.minecraft.registry.tag.EnchantmentTags;
 import net.fabricmc.api.Environment;
 import net.fabricmc.api.EnvironmentInterface;
 import net.fabricmc.api.ModInitializer;
@@ -30,11 +20,21 @@ import java.util.ArrayList;
 import java.util.List;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.screen.TitleScreen;
-import net.minecraft.client.toast.SystemToast;
-import net.minecraft.text.Text;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.toasts.SystemToast;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.TitleScreen;
+import net.minecraft.core.Holder;
+import net.minecraft.core.Registry;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.tags.EnchantmentTags;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
+import net.minecraft.world.item.enchantment.EnchantmentInstance;
 
 @EnvironmentInterface(value = EnvType.CLIENT, itf = ClientModInitializer.class)
 public final class Limitless implements ModInitializer, ClientModInitializer {
@@ -61,7 +61,7 @@ public final class Limitless implements ModInitializer, ClientModInitializer {
 		// the levels, because those live in a file, but the tooltip order lives in a tag that a file
 		// cannot change.
 		ServerLifecycleEvents.SERVER_STARTING.register(server -> {
-			DynamicRegistryManager manager = server.getRegistryManager();
+			RegistryAccess manager = server.registryAccess();
 			EnchantmentLevels.reload(manager);
 			EnchantmentStats.reload(manager);
 		});
@@ -75,7 +75,7 @@ public final class Limitless implements ModInitializer, ClientModInitializer {
 		// server as well. The client needs the same two reloads as the server, because it draws the
 		// tooltips itself and never sees the integrated server's registry manager.
 		ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
-			DynamicRegistryManager manager = client.getNetworkHandler().getRegistryManager();
+			RegistryAccess manager = client.getConnection().registryAccess();
 			EnchantmentLevels.reload(manager);
 			EnchantmentStats.reload(manager);
 
@@ -100,15 +100,15 @@ public final class Limitless implements ModInitializer, ClientModInitializer {
 	 * to once per session even though {@code AFTER_INIT} fires for every screen.
 	 */
 	@Environment(EnvType.CLIENT)
-	private static void reportConfigError(MinecraftClient client, Screen screen) {
+	private static void reportConfigError(Minecraft client, Screen screen) {
 		if (configErrorReported || !(screen instanceof TitleScreen) || Configuration.lastReadError() == null) {
 			return;
 		}
 
 		configErrorReported = true;
-		SystemToast.add(client.getToastManager(), SystemToast.Type.PERIODIC_NOTIFICATION,
-				Text.translatable("toast.limitless-rebuilt.config_error.title"),
-				Text.translatable("toast.limitless-rebuilt.config_error.description"));
+		SystemToast.add(client.getToastManager(), SystemToast.SystemToastId.PERIODIC_NOTIFICATION,
+				Component.translatable("toast.limitless-rebuilt.config_error.title"),
+				Component.translatable("toast.limitless-rebuilt.config_error.description"));
 	}
 
 	/**
@@ -119,25 +119,25 @@ public final class Limitless implements ModInitializer, ClientModInitializer {
 	 * result of the very call that decides the contents of the three lapis slots.
 	 */
 	@Environment(EnvType.CLIENT)
-	private static void selfCheck(DynamicRegistryManager manager) {
-		Registry<Enchantment> registry = manager.getOrThrow(RegistryKeys.ENCHANTMENT);
-		List<RegistryEntry<Enchantment>> candidates = new ArrayList<>();
-		registry.iterateEntries(EnchantmentTags.IN_ENCHANTING_TABLE).forEach(candidates::add);
+	private static void selfCheck(RegistryAccess manager) {
+		Registry<Enchantment> registry = manager.lookupOrThrow(Registries.ENCHANTMENT);
+		List<Holder<Enchantment>> candidates = new ArrayList<>();
+		registry.getTagOrEmpty(EnchantmentTags.IN_ENCHANTING_TABLE).forEach(candidates::add);
 
 		LimitlessLogger.debug("client self check: %d enchantments, %d limits, %d table candidates"
-				.formatted(registry.getIds().size(), EnchantmentLimits.size(), candidates.size()));
+				.formatted(registry.keySet().size(), EnchantmentLimits.size(), candidates.size()));
 
 		for (ItemStack stack : List.of(new ItemStack(Items.DIAMOND_SWORD), new ItemStack(Items.BOOK))) {
 			for (int power : new int[]{5, 30}) {
-				List<EnchantmentLevelEntry> entries =
-						EnchantmentHelper.getPossibleEntries(power, stack, candidates.stream());
+				List<EnchantmentInstance> entries =
+						EnchantmentHelper.getAvailableEnchantmentResults(power, stack, candidates.stream());
 				LimitlessLogger.debug("  power %d on %s -> %d %s"
 						.formatted(power, stack.getItem(), entries.size(), EnchantmentUtil.describe(entries)));
 			}
 		}
 
-		registry.getEntrySet().stream()
-				.filter(entry -> entry.getKey().getValue().toString().endsWith("sharpness"))
+		registry.entrySet().stream()
+				.filter(entry -> entry.getKey().identifier().toString().endsWith("sharpness"))
 				.findFirst()
 				.ifPresent(entry -> {
 					Enchantment sharpness = entry.getValue();
@@ -145,8 +145,8 @@ public final class Limitless implements ModInitializer, ClientModInitializer {
 							.formatted(
 									sharpness.getMinLevel(),
 									sharpness.getMaxLevel(),
-									sharpness.getMinPower(sharpness.getMinLevel()),
-									sharpness.getMinPower(30)));
+									sharpness.getMinCost(sharpness.getMinLevel()),
+									sharpness.getMinCost(30)));
 				});
 	}
 

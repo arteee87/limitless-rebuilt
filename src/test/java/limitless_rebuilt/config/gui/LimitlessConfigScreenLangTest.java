@@ -131,8 +131,8 @@ class LimitlessConfigScreenLangTest {
 			add(keys, CONFIG + literal);
 		}
 
-		// Text.translatable takes the finished key otherwise
-		for (String literal : callLiterals(source, "Text.translatable")) {
+		// Component.translatable takes the finished key otherwise
+		for (String literal : callLiterals(source, "Component.translatable")) {
 			if (!isConcatenated(source, literal, "namespace")) {
 				add(keys, literal);
 			}

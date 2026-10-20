@@ -7,12 +7,12 @@ import limitless_rebuilt.config.enchantment.entry.radius.VerticalRadius;
 import limitless_rebuilt.enchantment.EnchantingBlocks;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.EnchantingTableBlock;
-import net.minecraft.particle.ParticleTypes;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.random.Random;
-import net.minecraft.world.World;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.util.RandomSource;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.EnchantingTableBlock;
+import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -28,12 +28,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Environment(EnvType.CLIENT)
 @Mixin(EnchantingTableBlock.class)
 public abstract class EnchantingTableBlockMixin {
-	@Inject(method = "randomDisplayTick", at = @At("HEAD"), cancellable = true)
+	@Inject(method = "animateTick", at = @At("HEAD"), cancellable = true)
 	private void limitless_expandParticles(
 			BlockState state,
-			World world,
+			Level world,
 			BlockPos tablePos,
-			Random random,
+			RandomSource random,
 			CallbackInfo info) {
 		info.cancel();
 
@@ -76,12 +76,12 @@ public abstract class EnchantingTableBlockMixin {
 		}
 	}
 
-	private static boolean hasPower(World world, BlockPos tablePos, int dx, int dy, int dz) {
-		return EnchantingBlocks.enchantingPower(world.getBlockState(tablePos.add(dx, dy, dz)).getBlock()) > 0.0F;
+	private static boolean hasPower(Level world, BlockPos tablePos, int dx, int dy, int dz) {
+		return EnchantingBlocks.enchantingPower(world.getBlockState(tablePos.offset(dx, dy, dz)).getBlock()) > 0.0F;
 	}
 
-	private static void particle(World world, BlockPos tablePos, Random random, int dx, int dy, int dz) {
-		world.addParticleClient(
+	private static void particle(Level world, BlockPos tablePos, RandomSource random, int dx, int dy, int dz) {
+		world.addParticle(
 				ParticleTypes.ENCHANT,
 				tablePos.getX() + 0.5,
 				tablePos.getY() + 2.0,

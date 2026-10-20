@@ -4,25 +4,25 @@ import limitless_rebuilt.AttributeTooltipContext;
 import limitless_rebuilt.LimitlessLogger;
 import limitless_rebuilt.config.Configuration;
 import limitless_rebuilt.config.enchantment.entry.ReenchantingConfiguration;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.AttributeModifierSlot;
-import net.minecraft.component.type.AttributeModifiersComponent;
-import net.minecraft.component.type.ItemEnchantmentsComponent;
-import net.minecraft.component.type.TooltipDisplayComponent;
-import net.minecraft.entity.attribute.EntityAttribute;
-import net.minecraft.entity.attribute.EntityAttributeModifier;
-import net.minecraft.item.ItemStack;
 import java.util.List;
 import java.util.function.Consumer;
 import org.apache.commons.lang3.mutable.MutableBoolean;
 import limitless_rebuilt.config.enchantment.entry.EnchantmentTooltipConfiguration;
 import limitless_rebuilt.enchantment.EnchantmentStats;
 import limitless_rebuilt.enchantment.EnchantmentUtil;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.registry.entry.RegistryEntry;
-import net.minecraft.screen.ScreenTexts;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
+import net.minecraft.ChatFormatting;
+import net.minecraft.core.Holder;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.CommonComponents;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.EquipmentSlotGroup;
+import net.minecraft.world.entity.ai.attributes.Attribute;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.ItemAttributeModifiers;
+import net.minecraft.world.item.component.TooltipDisplay;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -51,21 +51,21 @@ public abstract class ItemStackMixin {
 	 *
 	 * <p>Vanilla paints its attribute lines per attribute — green for attack damage and speed, blue
 	 * for armour — so an unstyled line of our own lands in the middle of that block as white and the
-	 * tooltip reads as three different colours at once. {@link Formatting#BLUE} is the 0x5555FF
+	 * tooltip reads as three different colours at once. {@link ChatFormatting#BLUE} is the 0x5555FF
 	 * vanilla itself uses for the armour attributes; one colour for all of ours settles it. Do not
 	 * "fix" it to {@code GRAY}: that is the colour of an enchantment's own name, and these lines
 	 * answer a different question.
 	 */
-	private static final Formatting STAT_COLOR = Formatting.BLUE;
+	private static final ChatFormatting STAT_COLOR = ChatFormatting.BLUE;
 
 	@Redirect(
 			method = "isEnchantable",
 			at = @At(
 					value = "INVOKE",
-					target = "Lnet/minecraft/component/type/ItemEnchantmentsComponent;isEmpty()Z"
+					target = "Lnet/minecraft/world/item/enchantment/ItemEnchantments;isEmpty()Z"
 			)
 	)
-	private boolean allowReenchanting(ItemEnchantmentsComponent enchantments) {
+	private boolean allowReenchanting(ItemEnchantments enchantments) {
 		return Configuration.instance.enchantment.reenchanting.allowEquipment() || enchantments.isEmpty();
 	}
 
@@ -105,7 +105,7 @@ public abstract class ItemStackMixin {
 	private void allowEnchantedBooks(CallbackInfoReturnable<Boolean> info) {
 		ItemStack stack = (ItemStack) (Object) this;
 
-		if (!stack.contains(DataComponentTypes.STORED_ENCHANTMENTS)) {
+		if (!stack.has(DataComponents.STORED_ENCHANTMENTS)) {
 			return;
 		}
 
@@ -140,13 +140,13 @@ public abstract class ItemStackMixin {
 	 * into the attack damage line using it.
 	 */
 	@Inject(
-			method = "appendAttributeModifiersTooltip",
+			method = "addAttributeTooltips",
 			at = @At("HEAD")
 	)
 	private void openAttributeTooltip(
-			Consumer<Text> lines,
-			TooltipDisplayComponent display,
-			PlayerEntity player,
+			Consumer<Component> lines,
+			TooltipDisplay display,
+			Player player,
 			CallbackInfo info) {
 		AttributeTooltipContext.begin((ItemStack) (Object) this);
 	}
@@ -172,19 +172,16 @@ public abstract class ItemStackMixin {
 	 */
 	@Inject(
 			method = "method_57370",
-			at = @At(value = "INVOKE", target = "Lnet/minecraft/component/type/AttributeModifiersComponent$Display;"
-					+ "addTooltip(Ljava/util/function/Consumer;Lnet/minecraft/entity/player/PlayerEntity;"
-					+ "Lnet/minecraft/registry/entry/RegistryEntry;"
-					+ "Lnet/minecraft/entity/attribute/EntityAttributeModifier;)V")
+			at = @At(value = "INVOKE", target = "Lnet/minecraft/world/item/component/ItemAttributeModifiers$Display;apply(Ljava/util/function/Consumer;Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/core/Holder;Lnet/minecraft/world/entity/ai/attributes/AttributeModifier;)V")
 	)
 	private static void noteAttributeGroup(
 			MutableBoolean heading,
-			Consumer<Text> lines,
-			AttributeModifierSlot slot,
-			PlayerEntity player,
-			RegistryEntry<EntityAttribute> attribute,
-			EntityAttributeModifier modifier,
-			AttributeModifiersComponent.Display display,
+			Consumer<Component> lines,
+			EquipmentSlotGroup slot,
+			Player player,
+			Holder<Attribute> attribute,
+			AttributeModifier modifier,
+			ItemAttributeModifiers.Display display,
 			CallbackInfo info) {
 		AttributeTooltipContext.noteGroup(slot);
 	}
@@ -210,16 +207,16 @@ public abstract class ItemStackMixin {
 	 * path that opens the pass, after the last line has gone out. {@code begin()} resets everything at
 	 * the head of the method, so a pass that leaves by the early return has nothing left to clean.
 	 *
-	 * <p>1.21.11 inserted a {@link TooltipDisplayComponent} between the consumer and the player.
+	 * <p>1.21.11 inserted a {@link TooltipDisplay} between the consumer and the player.
 	 */
 	@Inject(
-			method = "appendAttributeModifiersTooltip",
+			method = "addAttributeTooltips",
 			at = @At(value = "RETURN", ordinal = 1)
 	)
 	private void addEnchantmentStats(
-			Consumer<Text> lines,
-			TooltipDisplayComponent display,
-			PlayerEntity player,
+			Consumer<Component> lines,
+			TooltipDisplay display,
+			Player player,
 			CallbackInfo info) {
 		try {
 			EnchantmentTooltipConfiguration configuration = Configuration.instance.enchantment.tooltip;
@@ -229,22 +226,22 @@ public abstract class ItemStackMixin {
 			}
 
 			List<EnchantmentStats.Stat> stats = EnchantmentStats.collect((ItemStack) (Object) this);
-			AttributeModifierSlot open = AttributeTooltipContext.lastGroup();
+			EquipmentSlotGroup open = AttributeTooltipContext.lastGroup();
 
 			if (!AttributeTooltipContext.sawAttackDamage()) {
 				float bonus = (float) EnchantmentStats.sharpnessBonus((ItemStack) (Object) this);
 
 				if (bonus != 0.0F) {
 					// Sharpness declares slots: ["mainhand"], so the folded line belongs to the hand group
-					open = heading(lines, open, AttributeModifierSlot.MAINHAND);
-					lines.accept(Text.translatable("tooltip.limitless.attack_damage",
-							EnchantmentStats.format(bonus)).formatted(STAT_COLOR));
+					open = heading(lines, open, EquipmentSlotGroup.MAINHAND);
+					lines.accept(Component.translatable("tooltip.limitless.attack_damage",
+							EnchantmentStats.format(bonus)).withStyle(STAT_COLOR));
 				}
 			}
 
 			for (EnchantmentStats.Stat stat : stats) {
 				open = heading(lines, open, stat.group());
-				lines.accept(Text.translatable(stat.key(), EnchantmentStats.render(stat)).formatted(STAT_COLOR));
+				lines.accept(Component.translatable(stat.key(), EnchantmentStats.render(stat)).withStyle(STAT_COLOR));
 			}
 		} finally {
 			AttributeTooltipContext.end();
@@ -267,15 +264,15 @@ public abstract class ItemStackMixin {
 	 * <p>The blank line and the grey heading are exactly what vanilla prints, so that a stack with our
 	 * extra lines cannot be told from a stack without them apart from the lines themselves.
 	 */
-	private static AttributeModifierSlot heading(Consumer<Text> lines, AttributeModifierSlot open, AttributeModifierSlot group) {
+	private static EquipmentSlotGroup heading(Consumer<Component> lines, EquipmentSlotGroup open, EquipmentSlotGroup group) {
 		String key = AttributeTooltipContext.heading(group);
 
 		if (key == null || group == open) {
 			return group;
 		}
 
-		lines.accept(ScreenTexts.EMPTY);
-		lines.accept(Text.translatable(key).formatted(Formatting.GRAY));
+		lines.accept(CommonComponents.EMPTY);
+		lines.accept(Component.translatable(key).withStyle(ChatFormatting.GRAY));
 
 		return group;
 	}

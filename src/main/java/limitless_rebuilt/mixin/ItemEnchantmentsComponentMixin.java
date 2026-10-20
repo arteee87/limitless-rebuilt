@@ -1,7 +1,7 @@
 package limitless_rebuilt.mixin;
 
 import com.mojang.serialization.Codec;
-import net.minecraft.component.type.ItemEnchantmentsComponent;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Constant;
@@ -9,7 +9,7 @@ import org.spongepowered.asm.mixin.injection.ModifyConstant;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
 /**
- * Removes the hard 255 level ceiling of {@link ItemEnchantmentsComponent}.
+ * Removes the hard 255 level ceiling of {@link ItemEnchantments}.
  *
  * <p>1.19.3 stored the level as a NBT {@code short} and the mod only had to redirect the two
  * {@code NbtCompound#putShort} calls that truncated it. 1.21.11 keeps the levels in a component and
@@ -28,7 +28,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
  * @author auoeke
  * @reason the mod raises the enchantment level limit beyond what the component allows
  */
-@Mixin(ItemEnchantmentsComponent.class)
+@Mixin(ItemEnchantments.class)
 public abstract class ItemEnchantmentsComponentMixin {
 	@Redirect(
 			method = "<clinit>",

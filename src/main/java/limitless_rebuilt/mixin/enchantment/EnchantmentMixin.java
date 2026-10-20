@@ -2,7 +2,7 @@ package limitless_rebuilt.mixin.enchantment;
 
 import limitless_rebuilt.config.Configuration;
 import limitless_rebuilt.enchantment.EnchantmentLimits;
-import net.minecraft.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.Enchantment;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -37,7 +37,7 @@ public abstract class EnchantmentMixin {
 	 * Without this every level above the last vanilla one would be rejected by the
 	 * {@code minPower <= power <= maxPower} window.
 	 */
-	@Inject(method = "getMaxPower", at = @At("RETURN"), cancellable = true)
+	@Inject(method = "getMaxCost", at = @At("RETURN"), cancellable = true)
 	private void limitless_getMaxPower(int level, CallbackInfoReturnable<Integer> info) {
 		info.setReturnValue(Integer.MAX_VALUE);
 	}

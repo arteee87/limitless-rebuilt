@@ -26,8 +26,8 @@ import me.shedaniel.clothconfig2.impl.builders.BooleanToggleBuilder;
 import me.shedaniel.clothconfig2.impl.builders.SubCategoryBuilder;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.text.Text;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
 
 /**
  * Configuration screen.
@@ -50,7 +50,7 @@ public final class LimitlessConfigScreen {
 
 		ConfigBuilder builder = ConfigBuilder.create()
 				.setParentScreen(parent)
-				.setTitle(Text.translatable("text.autoconfig.limitless-rebuilt.title"))
+				.setTitle(Component.translatable("text.autoconfig.limitless-rebuilt.title"))
 				.setSavingRunnable(Configuration::save);
 
 		ConfigEntryBuilder entries = builder.entryBuilder();
@@ -64,14 +64,14 @@ public final class LimitlessConfigScreen {
 
 	private static void generalCategory(ConfigBuilder builder, ConfigEntryBuilder entries, Configuration configuration) {
 		ConfigCategory category = builder.getOrCreateCategory(
-				Text.translatable("text.autoconfig.limitless-rebuilt.category.default"));
+				Component.translatable("text.autoconfig.limitless-rebuilt.category.default"));
 
 		category.addEntry(toggle(entries, "automaticReloading", configuration.automaticReloading,
 				value -> configuration.automaticReloading = value));
 		category.addEntry(toggle(entries, "debug", configuration.debug,
 				value -> configuration.debug = value));
 		category.addEntry(entries.startTextDescription(
-				Text.translatable("text.autoconfig.limitless-rebuilt.option.automaticReloading.@Tooltip")).build());
+				Component.translatable("text.autoconfig.limitless-rebuilt.option.automaticReloading.@Tooltip")).build());
 	}
 
 	private static void enchantmentCategory(
@@ -79,7 +79,7 @@ public final class LimitlessConfigScreen {
 			ConfigEntryBuilder entries,
 			EnchantmentConfiguration configuration) {
 		ConfigCategory category = builder.getOrCreateCategory(
-				Text.translatable("text.autoconfig.limitless-rebuilt.category.enchantment"));
+				Component.translatable("text.autoconfig.limitless-rebuilt.category.enchantment"));
 
 		category.addEntry(field(entries, "enchantment.globalMaxLevel", configuration.globalMaxLevel, 1, Integer.MAX_VALUE,
 				value -> configuration.globalMaxLevel = value));
@@ -176,7 +176,7 @@ public final class LimitlessConfigScreen {
 		List<String> blacklist = new ArrayList<>(blocks.blacklist);
 
 		section.add(entries.startStrList(
-						Text.translatable("text.autoconfig.limitless-rebuilt.option.enchantment.enchantingBlocks.whitelist"), whitelist)
+						Component.translatable("text.autoconfig.limitless-rebuilt.option.enchantment.enchantingBlocks.whitelist"), whitelist)
 				.setDefaultValue(whitelist)
 				.setSaveConsumer(values -> {
 					blocks.whitelist = Map.copyOf(parse(values, blocks.whitelist));
@@ -185,7 +185,7 @@ public final class LimitlessConfigScreen {
 				.build());
 
 		section.add(entries.startStrList(
-						Text.translatable("text.autoconfig.limitless-rebuilt.option.enchantment.enchantingBlocks.blacklist"), blacklist)
+						Component.translatable("text.autoconfig.limitless-rebuilt.option.enchantment.enchantingBlocks.blacklist"), blacklist)
 				.setDefaultValue(blacklist)
 				.setSaveConsumer(values -> {
 					blocks.blacklist = List.copyOf(values);
@@ -216,24 +216,24 @@ public final class LimitlessConfigScreen {
 		// the namespace follows the mod id, so a rename cannot leave the keys pointing at the old one
 		String namespace = "config." + Limitless.ID + ".";
 		// one level field and one switch per registered enchantment, so it starts collapsed
-		SubCategoryBuilder section = entries.startSubCategory(Text.translatable(namespace + "enchantments"))
+		SubCategoryBuilder section = entries.startSubCategory(Component.translatable(namespace + "enchantments"))
 				.setExpanded(false);
 
 		for (EnchantmentEntry entry : configuration.maxLevels) {
-			Text name = Text.translatable(namespace + entry.identifier);
+			Component name = Component.translatable(namespace + entry.identifier);
 
 			section.add(entries.startIntField(name, entry.maxLevel)
 					.setDefaultValue(entry.maxLevel)
 					.setMin(1)
 					.setMax(Integer.MAX_VALUE)
-					.setTooltip(Text.translatable(namespace + "maxLevel"))
+					.setTooltip(Component.translatable(namespace + "maxLevel"))
 					.setSaveConsumer(value -> entry.maxLevel = value)
 					.build());
 
-			section.add(entries.startBooleanToggle(name.copy().append(Text.literal(" — ")).append(
-							Text.translatable(namespace + "useGlobal")), entry.useGlobalMaxLevel)
+			section.add(entries.startBooleanToggle(name.copy().append(Component.literal(" — ")).append(
+							Component.translatable(namespace + "useGlobal")), entry.useGlobalMaxLevel)
 					.setDefaultValue(entry.useGlobalMaxLevel)
-					.setTooltip(Text.translatable(namespace + "useGlobalMaxLevel"))
+					.setTooltip(Component.translatable(namespace + "useGlobalMaxLevel"))
 					.setSaveConsumer(value -> entry.useGlobalMaxLevel = value)
 					.build());
 		}
@@ -254,7 +254,7 @@ public final class LimitlessConfigScreen {
 
 	private static void anvilCategory(ConfigBuilder builder, ConfigEntryBuilder entries, AnvilConfiguration configuration) {
 		ConfigCategory category = builder.getOrCreateCategory(
-				Text.translatable("text.autoconfig.limitless-rebuilt.category.anvil"));
+				Component.translatable("text.autoconfig.limitless-rebuilt.category.anvil"));
 
 		category.addEntry(toggle(entries, "anvil.mergeConflicts", configuration.mergeConflicts,
 				value -> configuration.mergeConflicts = value,
@@ -280,10 +280,10 @@ public final class LimitlessConfigScreen {
 				value -> configuration.normalization.enabled = value,
 				"anvil.normalization.enabled.@Tooltip"));
 		normalization.add(entries.startEnumSelector(
-						Text.translatable("text.autoconfig.limitless-rebuilt.option.anvil.normalization.display"),
+						Component.translatable("text.autoconfig.limitless-rebuilt.option.anvil.normalization.display"),
 						CostDisplay.class, configuration.normalization.display)
 				.setDefaultValue(configuration.normalization.display)
-				.setTooltip(Text.translatable(
+				.setTooltip(Component.translatable(
 						"text.autoconfig.limitless-rebuilt.option.anvil.normalization.display.@Tooltip"))
 				.setSaveConsumer(value -> configuration.normalization.display = value)
 				.build());
@@ -304,7 +304,7 @@ public final class LimitlessConfigScreen {
 
 	/** A collapsed section hides every option behind a click, so the top level ones start open. */
 	private static SubCategoryBuilder section(ConfigEntryBuilder entries, String key) {
-		return entries.startSubCategory(Text.translatable("text.autoconfig.limitless-rebuilt.option." + key))
+		return entries.startSubCategory(Component.translatable("text.autoconfig.limitless-rebuilt.option." + key))
 				.setExpanded(true);
 	}
 
@@ -326,12 +326,12 @@ public final class LimitlessConfigScreen {
 			boolean value,
 			java.util.function.Consumer<Boolean> consumer,
 			String description) {
-		BooleanToggleBuilder builder = entries.startBooleanToggle(Text.translatable(translationKey(key)), value)
+		BooleanToggleBuilder builder = entries.startBooleanToggle(Component.translatable(translationKey(key)), value)
 				.setDefaultValue(value)
 				.setSaveConsumer(consumer);
 
 		if (description != null) {
-			builder.setTooltip(Text.translatable(translationKey(description)));
+			builder.setTooltip(Component.translatable(translationKey(description)));
 		}
 
 		return builder.build();
@@ -361,7 +361,7 @@ public final class LimitlessConfigScreen {
 			java.util.function.Consumer<Integer> consumer,
 			String description) {
 		me.shedaniel.clothconfig2.impl.builders.IntFieldBuilder builder = entries.startIntField(
-				Text.translatable(translationKey(key)),
+				Component.translatable(translationKey(key)),
 				value);
 
 		builder.setDefaultValue(value)
@@ -370,7 +370,7 @@ public final class LimitlessConfigScreen {
 				.setSaveConsumer(consumer);
 
 		if (description != null) {
-			builder.setTooltip(Text.translatable(translationKey(description)));
+			builder.setTooltip(Component.translatable(translationKey(description)));
 		}
 
 		return builder.build();

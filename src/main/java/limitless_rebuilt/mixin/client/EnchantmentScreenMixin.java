@@ -8,16 +8,16 @@ import limitless_rebuilt.config.enchantment.entry.normalization.EnchantmentNorma
 import limitless_rebuilt.enchantment.ExperienceUtil;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.ingame.EnchantmentScreen;
-import net.minecraft.client.gui.screen.ingame.HandledScreen;
-import net.minecraft.enchantment.Enchantment;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.registry.DynamicRegistryManager;
-import net.minecraft.registry.Registry;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.screen.EnchantmentScreenHandler;
-import net.minecraft.text.Text;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.gui.screens.inventory.EnchantmentScreen;
+import net.minecraft.core.Registry;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.inventory.EnchantmentMenu;
+import net.minecraft.world.item.enchantment.Enchantment;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -32,8 +32,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  */
 @Environment(EnvType.CLIENT)
 @Mixin(EnchantmentScreen.class)
-public abstract class EnchantmentScreenMixin extends HandledScreen<EnchantmentScreenHandler> {
-	protected EnchantmentScreenMixin(EnchantmentScreenHandler handler, PlayerInventory inventory, Text title) {
+public abstract class EnchantmentScreenMixin extends AbstractContainerScreen<EnchantmentMenu> {
+	protected EnchantmentScreenMixin(EnchantmentMenu handler, Inventory inventory, Component title) {
 		super(handler, inventory, title);
 	}
 
@@ -62,31 +62,31 @@ public abstract class EnchantmentScreenMixin extends HandledScreen<EnchantmentSc
 	 */
 	@Redirect(
 			method = "render",
-			at = @At(value = "FIELD", target = "Lnet/minecraft/screen/EnchantmentScreenHandler;enchantmentPower:[I", ordinal = 0)
+			at = @At(value = "FIELD", target = "Lnet/minecraft/world/inventory/EnchantmentMenu;costs:[I", ordinal = 0)
 	)
-	private int[] limitless_renderRequirement(EnchantmentScreenHandler handler) {
+	private int[] limitless_renderRequirement(EnchantmentMenu handler) {
 		return cappedRequirement(handler);
 	}
 
 	@Redirect(
 			method = "render",
-			at = @At(value = "FIELD", target = "Lnet/minecraft/screen/EnchantmentScreenHandler;enchantmentPower:[I", ordinal = 1)
+			at = @At(value = "FIELD", target = "Lnet/minecraft/world/inventory/EnchantmentMenu;costs:[I", ordinal = 1)
 	)
-	private int[] limitless_renderRequirementText(EnchantmentScreenHandler handler) {
+	private int[] limitless_renderRequirementText(EnchantmentMenu handler) {
 		return cappedRequirement(handler);
 	}
 
 	@Redirect(
-			method = "drawBackground",
-			at = @At(value = "FIELD", target = "Lnet/minecraft/screen/EnchantmentScreenHandler;enchantmentPower:[I")
+			method = "renderBg",
+			at = @At(value = "FIELD", target = "Lnet/minecraft/world/inventory/EnchantmentMenu;costs:[I")
 	)
-	private int[] limitless_backgroundRequirement(EnchantmentScreenHandler handler) {
+	private int[] limitless_backgroundRequirement(EnchantmentMenu handler) {
 		return cappedRequirement(handler);
 	}
 
-	private int[] cappedRequirement(EnchantmentScreenHandler handler) {
+	private int[] cappedRequirement(EnchantmentMenu handler) {
 		return ExperienceUtil.capRequiredLevels(
-				handler.enchantmentPower,
+				handler.costs,
 				Configuration.instance.enchantment.maxLevelRequirement);
 	}
 
@@ -100,16 +100,16 @@ public abstract class EnchantmentScreenMixin extends HandledScreen<EnchantmentSc
 	 * screen compares its own.
 	 */
 	@Inject(method = "render", at = @At("HEAD"))
-	private void logRequirement(DrawContext context, int mouseX, int mouseY, float delta, CallbackInfo info) {
-		if (!Configuration.instance.debug || client.player == null) {
+	private void logRequirement(GuiGraphics context, int mouseX, int mouseY, float delta, CallbackInfo info) {
+		if (!Configuration.instance.debug || minecraft.player == null) {
 			return;
 		}
 
 		int limit = Configuration.instance.enchantment.maxLevelRequirement;
 		StringBuilder builder = new StringBuilder();
 
-		for (int slot = 0; slot < handler.enchantmentPower.length; slot++) {
-			int offered = handler.enchantmentPower[slot];
+		for (int slot = 0; slot < menu.costs.length; slot++) {
+			int offered = menu.costs[slot];
 			int required = ExperienceUtil.capRequiredLevel(offered, limit);
 
 			builder.append("slot %d: offered level=%d, required=%d (limit %d), player has %d -> %s%n"
@@ -118,8 +118,8 @@ public abstract class EnchantmentScreenMixin extends HandledScreen<EnchantmentSc
 							offered,
 							required,
 							limit,
-							client.player.experienceLevel,
-							client.player.experienceLevel >= required ? "affordable" : "NOT affordable"));
+							minecraft.player.experienceLevel,
+							minecraft.player.experienceLevel >= required ? "affordable" : "NOT affordable"));
 		}
 
 		String message = builder.toString();
@@ -136,19 +136,19 @@ public abstract class EnchantmentScreenMixin extends HandledScreen<EnchantmentSc
 	)
 	private boolean revealEnchantments(List<Object> lines, Object clue) {
 		if (!Configuration.instance.enchantment.revealEnchantments
-				|| client.player == null
-				|| client.world == null) {
+				|| minecraft.player == null
+				|| minecraft.level == null) {
 			lines.add(clue);
 			return true;
 		}
 
-		DynamicRegistryManager registries = client.world.getRegistryManager();
-		Registry<Enchantment> registry = registries.getOrThrow(RegistryKeys.ENCHANTMENT);
+		RegistryAccess registries = minecraft.level.registryAccess();
+		Registry<Enchantment> registry = registries.lookupOrThrow(Registries.ENCHANTMENT);
 		int found = 0;
 
-		for (int slot = 0; slot < handler.enchantmentPower.length; slot++) {
-			int id = handler.enchantmentId[slot];
-			int level = handler.enchantmentLevel[slot];
+		for (int slot = 0; slot < menu.costs.length; slot++) {
+			int id = menu.enchantClue[slot];
+			int level = menu.levelClue[slot];
 
 			// the handler stores -1 in both for a slot the table did not fill
 			if (id < 0 || level < 0) {
@@ -157,10 +157,10 @@ public abstract class EnchantmentScreenMixin extends HandledScreen<EnchantmentSc
 
 			// the ids come from this side's own registry, which method_17411 fills on the client as
 			// well, so the lookup has to resolve; the guard only covers a desynced raw id
-			Enchantment enchantment = registry.get(id);
+			Enchantment enchantment = registry.byId(id);
 
 			if (enchantment != null) {
-				lines.add(found++, Enchantment.getName(registry.getEntry(enchantment), level));
+				lines.add(found++, Enchantment.getFullname(registry.wrapAsHolder(enchantment), level));
 			}
 		}
 
@@ -172,37 +172,37 @@ public abstract class EnchantmentScreenMixin extends HandledScreen<EnchantmentSc
 	}
 
 	@Inject(method = "render", at = @At("TAIL"))
-	private void showNormalizedCost(DrawContext context, int mouseX, int mouseY, float delta, CallbackInfo info) {
+	private void showNormalizedCost(GuiGraphics context, int mouseX, int mouseY, float delta, CallbackInfo info) {
 		EnchantmentNormalizationEntry normalization = Configuration.instance.enchantment.normalization;
 
-		if (!normalization.enabled || client.player == null || client.player.getAbilities().creativeMode) {
+		if (!normalization.enabled || minecraft.player == null || minecraft.player.getAbilities().instabuild) {
 			return;
 		}
 
-		int originX = (width - backgroundWidth) / 2;
-		int originY = (height - backgroundHeight) / 2;
+		int originX = (width - imageWidth) / 2;
+		int originY = (height - imageHeight) / 2;
 
-		for (int slot = 0; slot < handler.enchantmentPower.length; slot++) {
-			int power = handler.enchantmentPower[slot];
+		for (int slot = 0; slot < menu.costs.length; slot++) {
+			int power = menu.costs[slot];
 
-			if (power <= 0 || client.player.experienceLevel <= Math.max(normalization.offset, power)) {
+			if (power <= 0 || minecraft.player.experienceLevel <= Math.max(normalization.offset, power)) {
 				continue;
 			}
 
-			int relative = ExperienceUtil.relativeCost(client.player, normalization.offset, slot + 1);
+			int relative = ExperienceUtil.relativeCost(minecraft.player, normalization.offset, slot + 1);
 			String text = "(%d)".formatted(relative);
 			int x = originX + 138;
 			int y = originY + 19 * (slot + 1);
 
-			boolean affordable = handler.getLapisCount() >= slot + 1;
+			boolean affordable = menu.getGoldCount() >= slot + 1;
 			int color = affordable ? COLOR_ENABLED : COLOR_DISABLED;
 			int outline = affordable ? OUTLINE_ENABLED : OUTLINE_DISABLED;
 
-			context.drawText(client.textRenderer, text, x - 1, y, outline, false);
-			context.drawText(client.textRenderer, text, x + 1, y, outline, false);
-			context.drawText(client.textRenderer, text, x, y - 1, outline, false);
-			context.drawText(client.textRenderer, text, x, y + 1, outline, false);
-			context.drawText(client.textRenderer, text, x, y, color, false);
+			context.drawString(minecraft.font, text, x - 1, y, outline, false);
+			context.drawString(minecraft.font, text, x + 1, y, outline, false);
+			context.drawString(minecraft.font, text, x, y - 1, outline, false);
+			context.drawString(minecraft.font, text, x, y + 1, outline, false);
+			context.drawString(minecraft.font, text, x, y, color, false);
 		}
 	}
 }

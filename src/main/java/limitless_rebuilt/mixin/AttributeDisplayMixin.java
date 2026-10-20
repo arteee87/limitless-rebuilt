@@ -3,10 +3,10 @@ package limitless_rebuilt.mixin;
 import limitless_rebuilt.AttributeTooltipContext;
 import limitless_rebuilt.config.Configuration;
 import limitless_rebuilt.enchantment.EnchantmentStats;
-import net.minecraft.component.type.AttributeModifiersComponent;
-import net.minecraft.entity.attribute.EntityAttributeModifier;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.ItemAttributeModifiers;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
@@ -33,24 +33,24 @@ import org.spongepowered.asm.mixin.injection.Redirect;
  * <p>The modifier is recognised by its identifier rather than by its attribute, which is how the
  * surrounding code picks it out too.
  */
-@Mixin(AttributeModifiersComponent.Display.Default.class)
+@Mixin(ItemAttributeModifiers.Display.Default.class)
 public class AttributeDisplayMixin {
 	@Redirect(
-			method = "addTooltip",
+			method = "apply",
 			at = @At(
 					value = "INVOKE",
-					target = "Lnet/minecraft/entity/attribute/EntityAttributeModifier;value()D"
+					target = "Lnet/minecraft/world/entity/ai/attributes/AttributeModifier;amount()D"
 			)
 	)
-	private double foldSharpness(EntityAttributeModifier modifier) {
-		double value = modifier.value();
+	private double foldSharpness(AttributeModifier modifier) {
+		double value = modifier.amount();
 
 		ItemStack stack = AttributeTooltipContext.stack();
 
 		// a null stack means vanilla asked for a line outside a stack tooltip, where there is nothing
 		// to compute a bonus against
 		if (stack != null
-				&& modifier.idMatches(Item.BASE_ATTACK_DAMAGE_MODIFIER_ID)
+				&& modifier.is(Item.BASE_ATTACK_DAMAGE_ID)
 				&& Configuration.instance.enchantment.tooltip.enabled) {
 			value += EnchantmentStats.sharpnessBonus(stack);
 			AttributeTooltipContext.markAttackDamage();

@@ -7,13 +7,13 @@ import limitless_rebuilt.config.common.CostDisplay;
 import limitless_rebuilt.enchantment.ExperienceUtil;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import net.minecraft.client.gui.screen.ingame.AnvilScreen;
-import net.minecraft.client.gui.screen.ingame.ForgingScreen;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.screen.AnvilScreenHandler;
-import net.minecraft.util.Identifier;
-import net.minecraft.text.MutableText;
-import net.minecraft.text.Text;
+import net.minecraft.client.gui.screens.inventory.AnvilScreen;
+import net.minecraft.client.gui.screens.inventory.ItemCombinerScreen;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.inventory.AnvilMenu;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -29,11 +29,11 @@ import org.spongepowered.asm.mixin.injection.Redirect;
  */
 @Environment(EnvType.CLIENT)
 @Mixin(AnvilScreen.class)
-public abstract class AnvilScreenMixin extends ForgingScreen<AnvilScreenHandler> {
+public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> {
 	protected AnvilScreenMixin(
-			AnvilScreenHandler handler,
-			PlayerInventory inventory,
-			Text title,
+			AnvilMenu handler,
+			Inventory inventory,
+			Component title,
 			Identifier texture) {
 		super(handler, inventory, title, texture);
 	}
@@ -42,51 +42,51 @@ public abstract class AnvilScreenMixin extends ForgingScreen<AnvilScreenHandler>
 	@Unique
 	private String limitlessLastDisplay;
 
-	@ModifyConstant(method = "drawForeground", constant = @Constant(intValue = 40))
+	@ModifyConstant(method = "renderLabels", constant = @Constant(intValue = 40))
 	private int modifyLevelLimit(int original) {
 		return Configuration.instance.anvil.effectiveLevelLimit();
 	}
 
 	@Redirect(
-			method = "drawForeground",
+			method = "renderLabels",
 			at = @At(
 					value = "INVOKE",
-					target = "Lnet/minecraft/text/Text;translatable(Ljava/lang/String;[Ljava/lang/Object;)Lnet/minecraft/text/MutableText;"
+					target = "Lnet/minecraft/network/chat/Component;translatable(Ljava/lang/String;[Ljava/lang/Object;)Lnet/minecraft/network/chat/MutableComponent;"
 			)
 	)
 	// Text#translatable returns a MutableText; a redirect handler has to match the return type
 	// exactly, otherwise the transformation of the whole class is aborted
-	private MutableText showNormalizedCost(String key, Object... args) {
+	private MutableComponent showNormalizedCost(String key, Object... args) {
 		AnvilNormalizationEntry normalization = Configuration.instance.anvil.normalization;
 
 		if (normalization.enabled
 				&& args.length > 0
 				&& args[0] instanceof Integer cost
-				&& client.player != null
-				&& client.player.experienceLevel > cost) {
-			int relative = ExperienceUtil.normalizedCost(client.player, cost);
+				&& minecraft.player != null
+				&& minecraft.player.experienceLevel > cost) {
+			int relative = ExperienceUtil.normalizedCost(minecraft.player, cost);
 
 			if (normalization.display == CostDisplay.REPLACE) {
 				logDisplayChange("anvil display: cost=%d normalized=%d -> REPLACE".formatted(cost, relative));
-				return Text.translatable(key, relative);
+				return Component.translatable(key, relative);
 			}
 
 			if (normalization.display == CostDisplay.APPEND) {
 				Object[] copy = args.clone();
 				copy[0] = args[0] + " (" + relative + ")";
 				logDisplayChange("anvil display: cost=%d normalized=%d -> APPEND".formatted(cost, relative));
-				return Text.translatable(key, copy);
+				return Component.translatable(key, copy);
 			}
 		} else if (Configuration.instance.debug && args.length > 0 && args[0] instanceof Integer cost) {
 			// the guard is "player is above the cost", so this is the line that explains why the
 			// shown cost is still the vanilla one
 			logDisplayChange("anvil display: cost=%d NOT normalized (enabled=%s level=%s display=%s)"
 					.formatted(cost, normalization.enabled,
-							client.player != null ? client.player.experienceLevel : "no player",
+							minecraft.player != null ? minecraft.player.experienceLevel : "no player",
 							normalization.display));
 		}
 
-		return Text.translatable(key, args);
+		return Component.translatable(key, args);
 	}
 
 	/**

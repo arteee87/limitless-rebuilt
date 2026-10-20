@@ -1,6 +1,6 @@
 package limitless_rebuilt.enchantment;
 
-import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.world.entity.player.Player;
 
 /**
  * Level/experience arithmetic that mirrors how the vanilla enchanting and anvil costs are charged.
@@ -11,7 +11,7 @@ import net.minecraft.entity.player.PlayerEntity;
  *
  * <p>Ports the 1.19.3 implementation of the mod verbatim.
  *
- * <p>The experience has to be handed to {@link PlayerEntity#addExperience(int)} and not written
+ * <p>The experience has to be handed to {@link Player#giveExperiencePoints(int)} and not written
  * into the fields directly: that method carries the level along, since 1.21.4 keeps
  * {@code experienceLevel} as the authoritative value and recomputes it from
  * {@code experienceProgress} only inside {@code addExperienceLevels}. An earlier port called a
@@ -62,7 +62,7 @@ public final class ExperienceUtil {
 		return capped;
 	}
 
-	private static long currentExperience(PlayerEntity player) {
+	private static long currentExperience(Player player) {
 		return normalizedExperience(player.experienceLevel)
 				+ (long) ((float) toNextLevel(player.experienceLevel) * player.experienceProgress);
 	}
@@ -72,33 +72,33 @@ public final class ExperienceUtil {
 	 * bar consistent so that the player ends up with the same amount of experience a player of
 	 * level {@code offset} would have.
 	 */
-	public static void addExperienceLevelsRelatively(PlayerEntity player, int offset, int levels) {
+	public static void addExperienceLevelsRelatively(Player player, int offset, int levels) {
 		if (player.experienceLevel <= offset) {
-			player.addExperienceLevels(levels);
+			player.giveExperienceLevels(levels);
 		} else if (levels > 0) {
 			for (int level = offset - levels; level != offset; level++) {
-				player.addExperience((int) fromPreviousLevel(level));
+				player.giveExperiencePoints((int) fromPreviousLevel(level));
 			}
 		} else {
 			for (int level = levels + offset; level != offset; level++) {
-				player.addExperience((int) -fromPreviousLevel(-level));
+				player.giveExperiencePoints((int) -fromPreviousLevel(-level));
 			}
 		}
 	}
 
-	public static void addExperienceLevelsNormalized(PlayerEntity player, int levels) {
+	public static void addExperienceLevelsNormalized(Player player, int levels) {
 		addExperienceLevelsRelatively(player, 0, levels);
 	}
 
 	/** Number of levels the player would drop to after paying {@code levels}. */
-	public static int relativeCost(PlayerEntity player, int offset, int levels) {
+	public static int relativeCost(Player player, int offset, int levels) {
 		int level = player.experienceLevel;
 		return level > offset
 				? level - toLevel(currentExperience(player) - difference(levels - offset, offset))
 				: level - levels;
 	}
 
-	public static int normalizedCost(PlayerEntity player, int levels) {
+	public static int normalizedCost(Player player, int levels) {
 		return relativeCost(player, 0, levels);
 	}
 

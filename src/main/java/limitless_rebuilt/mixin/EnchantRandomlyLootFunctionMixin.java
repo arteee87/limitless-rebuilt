@@ -1,9 +1,8 @@
 package limitless_rebuilt.mixin;
 
 import limitless_rebuilt.enchantment.EnchantmentLimits;
-import net.minecraft.enchantment.Enchantment;
-import net.minecraft.loot.function.EnchantRandomlyLootFunction;
-import net.minecraft.registry.entry.RegistryEntry;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.level.storage.loot.functions.EnchantRandomlyFunction;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
@@ -15,11 +14,11 @@ import org.spongepowered.asm.mixin.injection.Redirect;
  * level 2147483647 books, since the function picks a level between the minimum and
  * {@code getMaxLevel()}.
  */
-@Mixin(EnchantRandomlyLootFunction.class)
+@Mixin(EnchantRandomlyFunction.class)
 public abstract class EnchantRandomlyLootFunctionMixin {
 	@Redirect(
-			method = "addEnchantmentToStack",
-			at = @At(value = "INVOKE", target = "Lnet/minecraft/enchantment/Enchantment;getMaxLevel()I")
+			method = "enchantItem",
+			at = @At(value = "INVOKE", target = "Lnet/minecraft/world/item/enchantment/Enchantment;getMaxLevel()I")
 	)
 	private static int vanillaMaxLevel(Enchantment enchantment) {
 		return EnchantmentLimits.originalMaxLevel(enchantment);

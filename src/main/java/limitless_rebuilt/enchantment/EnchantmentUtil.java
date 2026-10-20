@@ -5,24 +5,24 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import limitless_rebuilt.config.Configuration;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.ItemEnchantmentsComponent;
-import net.minecraft.enchantment.Enchantment;
-import net.minecraft.enchantment.EnchantmentHelper;
-import net.minecraft.enchantment.EnchantmentLevelEntry;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.DynamicRegistryManager;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.registry.entry.RegistryEntry;
-import net.minecraft.registry.entry.RegistryEntryList;
-import net.minecraft.registry.tag.EnchantmentTags;
+import net.minecraft.core.Holder;
+import net.minecraft.core.HolderSet;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.tags.EnchantmentTags;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
+import net.minecraft.world.item.enchantment.EnchantmentInstance;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
 
 /**
  * Enchantment merging used by the enchanting table.
  *
  * <p>The 1.19.3 implementation read and wrote the {@code StoredEnchantments} NBT list and truncated
  * the level to a {@code short} on the way; 1.21.11 keeps the same data in
- * {@link ItemEnchantmentsComponent}, where the level is an {@code int} and never truncates.
+ * {@link ItemEnchantments}, where the level is an {@code int} and never truncates.
  */
 public final class EnchantmentUtil {
 	/**
@@ -46,26 +46,26 @@ public final class EnchantmentUtil {
 	 */
 	public static boolean highestSuitableLevel(
 			int power,
-			RegistryEntry<Enchantment> entry,
-			List<EnchantmentLevelEntry> out) {
+			Holder<Enchantment> entry,
+			List<EnchantmentInstance> out) {
 		Enchantment enchantment = entry.value();
 		int minLevel = enchantment.getMinLevel();
 		int last = Math.min(enchantment.getMaxLevel(), minLevel + MAX_LEVEL_SEARCH);
 		int found = 0;
 		boolean any = false;
 		for (int level = minLevel; level <= last; level++) {
-			int minPower = enchantment.getMinPower(level);
+			int minPower = enchantment.getMinCost(level);
 			if (minPower > power) {
 				// the curve grew past what the table offers, so nothing above matches either
 				break;
 			}
-			if (minPower <= power && power <= enchantment.getMaxPower(level)) {
+			if (minPower <= power && power <= enchantment.getMaxCost(level)) {
 				found = level;
 				any = true;
 			}
 		}
 		if (any) {
-			out.add(new EnchantmentLevelEntry(entry, found));
+			out.add(new EnchantmentInstance(entry, found));
 		}
 		return any;
 	}
@@ -77,14 +77,14 @@ public final class EnchantmentUtil {
 	 */
 	public static boolean mergeEnchantment(
 			ItemStack stack,
-			RegistryEntry<Enchantment> enchantment,
+			Holder<Enchantment> enchantment,
 			int level,
 			boolean mergeConflicts) {
-		ItemEnchantmentsComponent.Builder builder =
-				new ItemEnchantmentsComponent.Builder(EnchantmentHelper.getEnchantments(stack));
+		ItemEnchantments.Mutable builder =
+				new ItemEnchantments.Mutable(EnchantmentHelper.getEnchantmentsForCrafting(stack));
 		if (!mergeConflicts) {
-			for (RegistryEntry<Enchantment> present : builder.getEnchantments()) {
-				if (!present.equals(enchantment) && !Enchantment.canBeCombined(enchantment, present)) {
+			for (Holder<Enchantment> present : builder.keySet()) {
+				if (!present.equals(enchantment) && !Enchantment.areCompatible(enchantment, present)) {
 					return false;
 				}
 			}
@@ -96,30 +96,30 @@ public final class EnchantmentUtil {
 			builder.set(enchantment, Math.max(current, level));
 		}
 		// EnchantmentHelper.set picks STORED_ENCHANTMENTS for books and ENCHANTMENTS otherwise
-		EnchantmentHelper.set(stack, builder.build());
+		EnchantmentHelper.setEnchantments(stack, builder.toImmutable());
 		return true;
 	}
-	private static int maxLevel(RegistryEntry<Enchantment> enchantment) {
+	private static int maxLevel(Holder<Enchantment> enchantment) {
 		EnchantmentLimits.Limit limit = EnchantmentLimits.get(enchantment.value());
 		return limit == null ? enchantment.value().getMaxLevel() : limit.maxLevel();
 	}
 	/** Identifier of an enchantment, for the debug log. */
-	public static String identifier(RegistryEntry<Enchantment> enchantment) {
-		return enchantment.getKey()
-				.map(key -> key.getValue().toString())
+	public static String identifier(Holder<Enchantment> enchantment) {
+		return enchantment.unwrapKey()
+				.map(key -> key.identifier().toString())
 				.orElse("unknown");
 	}
 	/**
 	 * How many enchantments the enchanting table may offer at all, i.e. the size of
 	 * {@code #minecraft:in_enchanting_table}. Zero here means an empty table whatever the limits are.
 	 */
-	public static int candidateCount(DynamicRegistryManager registries) {
+	public static int candidateCount(RegistryAccess registries) {
 		if (registries == null) {
 			return -1;
 		}
-		return registries.getOrThrow(RegistryKeys.ENCHANTMENT)
-				.getOptional(EnchantmentTags.IN_ENCHANTING_TABLE)
-				.map(RegistryEntryList::stream)
+		return registries.lookupOrThrow(Registries.ENCHANTMENT)
+				.get(EnchantmentTags.IN_ENCHANTING_TABLE)
+				.map(HolderSet::stream)
 				.map(stream -> (int) stream.count())
 				.orElse(0);
 	}
@@ -139,28 +139,28 @@ public final class EnchantmentUtil {
 	 * {@code reenchanting.enabled}, so both halves are honoured here.
 	 */
 	public static boolean isEnchantable(ItemStack stack) {
-		if (stack.contains(DataComponentTypes.ENCHANTABLE)) {
+		if (stack.has(DataComponents.ENCHANTABLE)) {
 			return true;
 		}
 
 		return Configuration.instance.enchantment.reenchanting.allowEnchantedBooks()
-				&& stack.contains(DataComponentTypes.STORED_ENCHANTMENTS);
+				&& stack.has(DataComponents.STORED_ENCHANTMENTS);
 	}
 
 	/** Every enchantment a stack carries, keyed by identifier, for logging and for the GUI. */
 	public static Map<String, Integer> levels(ItemStack stack) {
 		Map<String, Integer> levels = new LinkedHashMap<>();
-		for (Object2IntMap.Entry<RegistryEntry<Enchantment>> entry :
-				EnchantmentHelper.getEnchantments(stack).getEnchantmentEntries()) {
-			RegistryEntry<Enchantment> enchantment = entry.getKey();
+		for (Object2IntMap.Entry<Holder<Enchantment>> entry :
+				EnchantmentHelper.getEnchantmentsForCrafting(stack).entrySet()) {
+			Holder<Enchantment> enchantment = entry.getKey();
 			levels.put(
-					enchantment.getKey().map(key -> key.getValue().toString()).orElse("unknown"),
+					enchantment.unwrapKey().map(key -> key.identifier().toString()).orElse("unknown"),
 					entry.getIntValue());
 		}
 		return levels;
 	}
 	/** Renders entries as {@code [id=level, ...]}; the first few only, the rest is noise in a log. */
-	public static String describe(List<EnchantmentLevelEntry> entries) {
+	public static String describe(List<EnchantmentInstance> entries) {
 		if (entries.isEmpty()) {
 			return "";
 		}
@@ -173,7 +173,7 @@ public final class EnchantmentUtil {
 				builder.append(", ");
 			}
 
-			EnchantmentLevelEntry entry = entries.get(i);
+			EnchantmentInstance entry = entries.get(i);
 			builder.append(identifier(entry.enchantment())).append('=').append(entry.level());
 		}
 

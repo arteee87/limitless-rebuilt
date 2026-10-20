@@ -2,8 +2,8 @@ package limitless_rebuilt;
 
 import java.util.EnumSet;
 import java.util.Set;
-import net.minecraft.component.type.AttributeModifierSlot;
-import net.minecraft.item.ItemStack;
+import net.minecraft.world.entity.EquipmentSlotGroup;
+import net.minecraft.world.item.ItemStack;
 
 /**
  * The stack whose attribute tooltip is being built right now.
@@ -27,18 +27,18 @@ public final class AttributeTooltipContext {
 	 * {@code SADDLE} have none, so a line belonging to one of them is printed without a heading rather
 	 * than with a key that would render as the raw identifier.
 	 */
-	private static final Set<AttributeModifierSlot> HEADED = EnumSet.of(
-			AttributeModifierSlot.MAINHAND,
-			AttributeModifierSlot.OFFHAND,
-			AttributeModifierSlot.FEET,
-			AttributeModifierSlot.LEGS,
-			AttributeModifierSlot.CHEST,
-			AttributeModifierSlot.HEAD,
-			AttributeModifierSlot.ARMOR);
+	private static final Set<EquipmentSlotGroup> HEADED = EnumSet.of(
+			EquipmentSlotGroup.MAINHAND,
+			EquipmentSlotGroup.OFFHAND,
+			EquipmentSlotGroup.FEET,
+			EquipmentSlotGroup.LEGS,
+			EquipmentSlotGroup.CHEST,
+			EquipmentSlotGroup.HEAD,
+			EquipmentSlotGroup.ARMOR);
 
 	private static ItemStack stack;
 	private static boolean sawAttackDamage;
-	private static AttributeModifierSlot lastGroup;
+	private static EquipmentSlotGroup lastGroup;
 
 	private AttributeTooltipContext() {
 	}
@@ -70,12 +70,12 @@ public final class AttributeTooltipContext {
 	 * nothing about whether a heading was drawn. A stack with no attribute modifiers at all answers
 	 * {@code null}, and our own lines then open their first group themselves.
 	 */
-	public static AttributeModifierSlot lastGroup() {
+	public static EquipmentSlotGroup lastGroup() {
 		return lastGroup;
 	}
 
 	/** Called once per attribute line vanilla prints. */
-	public static void noteGroup(AttributeModifierSlot slot) {
+	public static void noteGroup(EquipmentSlotGroup slot) {
 		lastGroup = slot;
 	}
 
@@ -85,8 +85,8 @@ public final class AttributeTooltipContext {
 	 * <p>Vanilla's own key is reused rather than a new one added: the wording is already translated
 	 * into every language the game ships, and a second key would start out English-only.
 	 */
-	public static String heading(AttributeModifierSlot slot) {
-		return slot != null && HEADED.contains(slot) ? "item.modifiers." + slot.asString() : null;
+	public static String heading(EquipmentSlotGroup slot) {
+		return slot != null && HEADED.contains(slot) ? "item.modifiers." + slot.getSerializedName() : null;
 	}
 
 	/** Whether vanilla printed an attack damage line that the sharpness bonus was folded into. */

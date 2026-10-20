@@ -3,7 +3,7 @@ package limitless_rebuilt.mixin;
 import limitless_rebuilt.config.Configuration;
 import limitless_rebuilt.config.enchantment.entry.normalization.EnchantmentNormalizationEntry;
 import limitless_rebuilt.enchantment.ExperienceUtil;
-import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.world.entity.player.Player;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
@@ -15,17 +15,17 @@ import org.spongepowered.asm.mixin.injection.Redirect;
  * from wherever they were to exactly that level; the mod instead subtracts the same amount of
  * experience, so a player at level 300 pays like a player at level 30.
  */
-@Mixin(PlayerEntity.class)
+@Mixin(Player.class)
 public abstract class PlayerEntityMixin {
 	@Redirect(
-			method = "applyEnchantmentCosts",
+			method = "onEnchantmentPerformed",
 			at = @At(
 					value = "FIELD",
-					target = "Lnet/minecraft/entity/player/PlayerEntity;experienceLevel:I",
+					target = "Lnet/minecraft/world/entity/player/Player;experienceLevel:I",
 					ordinal = 1
 			)
 	)
-	private void normalizeCost(PlayerEntity player, int levels) {
+	private void normalizeCost(Player player, int levels) {
 		EnchantmentNormalizationEntry normalization = Configuration.instance.enchantment.normalization;
 
 		if (normalization.enabled && player.experienceLevel > normalization.offset) {

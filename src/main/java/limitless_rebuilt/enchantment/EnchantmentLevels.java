@@ -7,11 +7,11 @@ import limitless_rebuilt.LimitlessLogger;
 import limitless_rebuilt.config.Configuration;
 import limitless_rebuilt.config.enchantment.EnchantmentConfiguration;
 import limitless_rebuilt.config.enchantment.entry.EnchantmentEntry;
-import net.minecraft.enchantment.Enchantment;
-import net.minecraft.registry.DynamicRegistryManager;
-import net.minecraft.registry.Registry;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryKeys;
+import net.minecraft.core.Registry;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.item.enchantment.Enchantment;
 
 /**
  * Pushes the configured level limits into {@link EnchantmentLimits}.
@@ -24,7 +24,7 @@ import net.minecraft.registry.RegistryKeys;
  * used to make while registering.
  */
 public final class EnchantmentLevels {
-	private static final RegistryKey<Registry<Enchantment>> KEY = RegistryKeys.ENCHANTMENT;
+	private static final ResourceKey<Registry<Enchantment>> KEY = Registries.ENCHANTMENT;
 	private static final int MAX_POWER_SCAN = 1000;
 
 	/**
@@ -69,12 +69,12 @@ public final class EnchantmentLevels {
 	}
 
 	/** Binds to a manager and applies the configuration; used by both the server and the client. */
-	public static void reload(DynamicRegistryManager manager) {
+	public static void reload(RegistryAccess manager) {
 		if (manager == null) {
 			return;
 		}
 
-		registry = manager.getOrThrow(KEY);
+		registry = manager.lookupOrThrow(KEY);
 		apply(registry);
 	}
 
@@ -90,8 +90,8 @@ public final class EnchantmentLevels {
 		EnchantmentConfiguration configuration = Configuration.instance.enchantment;
 		List<EnchantmentEntry> added = new ArrayList<>();
 
-		for (Map.Entry<RegistryKey<Enchantment>, Enchantment> entry : registry.getEntrySet()) {
-			String identifier = entry.getKey().getValue().toString();
+		for (Map.Entry<ResourceKey<Enchantment>, Enchantment> entry : registry.entrySet()) {
+			String identifier = entry.getKey().identifier().toString();
 			Enchantment enchantment = entry.getValue();
 			EnchantmentEntry configured = configuration.entry(identifier);
 
@@ -135,10 +135,10 @@ public final class EnchantmentLevels {
 
 		int minLevel = enchantment.getMinLevel();
 		int iterations = Math.min(MAX_POWER_SCAN, original - minLevel);
-		int previousPower = enchantment.getMinPower(minLevel);
+		int previousPower = enchantment.getMinCost(minLevel);
 
 		for (int level = 1; level <= iterations; level++) {
-			int power = enchantment.getMinPower(minLevel + level);
+			int power = enchantment.getMinCost(minLevel + level);
 
 			if (previousPower < power) {
 				return clamp(Integer.MAX_VALUE);
