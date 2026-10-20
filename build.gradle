@@ -1,6 +1,7 @@
 plugins {
 	id 'net.fabricmc.fabric-loom' version "${loom_version}"
 	id 'maven-publish'
+	id 'com.modrinth.minotaur' version '2.10.0'
 }
 
 version = "${project.mod_version}+mc${project.minecraft_version}"
@@ -81,3 +82,42 @@ jar {
 // Modrinth publication through the official Minotaur plugin. The token does not appear here: the
 // plugin reads the MODRINTH_TOKEN environment variable by default, and CI takes it from a GitHub
 // Actions secret.
+
+// Modrinth publication through the official Minotaur plugin. The token does not appear here: the
+// plugin reads the MODRINTH_TOKEN environment variable by default, and CI takes it from a GitHub
+// Actions secret.
+modrinth {
+	// exactly the suffix the jar and the tag carry. CI checks the tag against gradle.properties in the
+	// release workflow instead; tools/release-matrix.py --check belongs locally, before the tag is
+	// set, because it cannot see history from a detached one-commit checkout.
+	versionNumber = "${project.mod_version}+mc${project.minecraft_version}"
+	projectId = project.modrinth_project_id
+
+	gameVersions = [project.minecraft_version]
+	loaders = ['fabric']
+
+	// CI passes these through ORG_GRADLE_PROJECT_*, because the release text is multi-line and -P
+	// breaks on the quotes. Locally the defaults stay.
+	versionType = findProperty('modrinthVersionType') ?: 'release'
+	changelog = findProperty('modrinthChangelog') ?: ''
+
+	// only the remapped jar: Modrinth does not ask for -sources.jar, and it would be dead weight
+	// there as well.
+	// archiveFile rather than the task itself: the plugin wants a Provider<RegularFile>, and handing
+	// it a TaskProvider fails while build.gradle is still being read.
+	file = project.tasks.named('jar').flatMap { it.archiveFile }
+
+	// A dry run that checks how the fields parse without spending a version number:
+	//     MODRINTH_TOKEN=... ./gradlew modrinth -PmodrinthDebug=true
+	// findProperty hands back a String while the property here is a boolean, so it is parsed by hand.
+	debugMode = Boolean.parseBoolean(findProperty('modrinthDebug') ?: 'false')
+
+	// The same set as fabric.mod.json. The versions deliberately do not match: Modrinth has no field for
+	// a range, only for one exact version, and pinning would make everyone on a newer Fabric API look
+	// like they have an unmet dependency. The ranges live in fabric.mod.json and Fabric enforces them.
+	dependencies {
+		required.project 'P7dR8mSH'   // Fabric API
+		required.project '9s6osm5g'   // Cloth Config
+		optional.project 'mOgUt4GM'   // Mod Menu — in fabric.mod.json this is recommends
+	}
+}
