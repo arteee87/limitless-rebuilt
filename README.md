@@ -38,7 +38,7 @@ Check the branches (branch name = mc version).
 
 # Building
 
-Requires JDK 21.
+Requires JDK 25.
 
      git clone https://github.com/arteee87/limitless-rebuilt.git
      cd limitless-rebuilt
