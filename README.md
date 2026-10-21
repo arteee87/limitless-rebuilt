@@ -6,16 +6,16 @@ Original repo is not available, the last released jar was extracted & analyzed b
 
 Mod features:
      
-     raises the enchantment level limit to 2147483647;
+     raises the enchantment level limit to 2147483647 (configurable, default is set to 100);
      allows items to be reenchanted (configurable; enabled by default);
-     normalizes anvil enchantment cost to take the same amount of experience as a player with that exact level;
+     adds an option for anvil enchantment cost to take a fixed amount of experience instead of levels;
+     limits anvil cost at 40, removes "too expensive" blocker (configurable);
      makes enchantment cost for players with levels above 30 the same as for players with level 30 (configurable);
      allows enchantments in enchantment tables to be revealed (disabled by default);
      makes the enchanting power of all blocks configurable (only through the JSON configuration);
-     treats other mods' bookshelves as enchanting blocks in addition to the default bookshelf;
-     disables survival mode anvil level limit (or caps the cost at a configurable value, enabled by default);
-     makes anvil repair cost constant instead of exponential (always on);
-     disables bookshelf limit and increases range to 64 meters horizontally and vertically (configurable);
+     treats other mods' bookshelves as enchanting blocks in addition to the default bookshelf via fabric convention tags (#c:enchanting_blocks and #c:bookshelves);
+     makes anvil repair cost constant instead of exponential;
+     disables bookshelf limit and increases range up to 64 blocks horizontally and vertically (configurable, default is 8x8);
      allows treasure enchantments to be acquired at enchanting tables (configurable; enabled by default); and
      shows the enchantment effects in the tooltip (configurable, enabled by default).
 
@@ -38,7 +38,7 @@ Check the branches (branch name = mc version).
 
 # Building
 
-Requires JDK 25.
+Requires JDK 21.
 
      git clone https://github.com/arteee87/limitless-rebuilt.git
      cd limitless-rebuilt
