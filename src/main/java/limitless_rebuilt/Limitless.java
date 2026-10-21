@@ -106,7 +106,7 @@ public final class Limitless implements ModInitializer, ClientModInitializer {
 		}
 
 		configErrorReported = true;
-		SystemToast.add(client.getToastManager(), SystemToast.SystemToastId.PERIODIC_NOTIFICATION,
+		SystemToast.add(client.gui.toastManager(), SystemToast.SystemToastId.PERIODIC_NOTIFICATION,
 				Component.translatable("toast.limitless-rebuilt.config_error.title"),
 				Component.translatable("toast.limitless-rebuilt.config_error.description"));
 	}
